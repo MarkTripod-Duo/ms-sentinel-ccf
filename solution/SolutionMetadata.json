@@ -1,0 +1,15 @@
+{
+  "publisherId": "",
+  "offerId": "azure-sentinel-solution-ciscoduo-ccf",
+  "firstPublishDate": "2026-06-08",
+  "providers": ["Cisco"],
+  "categories": {
+    "domains": ["Security - Threat Protection", "Identity"]
+  },
+  "support": {
+    "name": "Community",
+    "email": "set-your-email@example.com",
+    "tier": "Community",
+    "link": "https://github.com/"
+  }
+}

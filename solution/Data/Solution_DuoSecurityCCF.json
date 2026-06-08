@@ -1,0 +1,14 @@
+{
+  "Name": "DuoSecurityCCF",
+  "Author": "Duo Sentinel CCF (community) - set-your-email@example.com",
+  "Logo": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Cisco_Duo.svg\" width=\"75px\" height=\"75px\">",
+  "Description": "The **Cisco Duo Security (CCF)** solution ingests authentication, activity, and telephony logs from the [Duo Admin API v2](https://duo.com/docs/adminapi) into Microsoft Sentinel using the Codeless Connector Framework. Because the Duo Admin API requires per-request HMAC-SHA1 signing (which CCF cannot perform natively), the connector polls a lightweight signing proxy (an Azure Function deployed from this solution's `signing-proxy/`) that signs each request and forwards it to Duo.\n\n**Underlying Microsoft Technologies used:**\n\nThis solution depends on the [Codeless Connector Framework (CCF)](https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector) and DCR-based ingestion-time transformations, which may be in Preview and may incur additional ingestion or operational costs.",
+  "Data Connectors": [
+    "Data Connectors/DuoSecurityCCF_ccp/DuoSecurity_DataConnectorDefinition.json"
+  ],
+  "BasePath": "/Users/matripod/code/ms-sentinel-ccf/solution",
+  "Version": "1.0.0",
+  "Metadata": "SolutionMetadata.json",
+  "TemplateSpec": true,
+  "Is1PConnector": false
+}

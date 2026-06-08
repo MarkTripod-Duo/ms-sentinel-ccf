@@ -1,0 +1,173 @@
+[
+    {
+        "name": "DuoSecurityAuthenticationPoller",
+        "apiVersion": "2022-10-01-preview",
+        "type": "Microsoft.SecurityInsights/dataConnectors",
+        "location": "{{location}}",
+        "kind": "RestApiPoller",
+        "properties": {
+            "connectorDefinitionName": "DuoSecurityCCF",
+            "dcrConfig": {
+                "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+                "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}",
+                "streamName": "Custom-DuoSecurityAuthentication_CL"
+            },
+            "dataType": "Duo Authentication Logs v2",
+            "auth": {
+                "type": "APIKey",
+                "ApiKey": "{{functionKey}}",
+                "ApiKeyName": "x-functions-key",
+                "ApiKeyIdentifier": ""
+            },
+            "request": {
+                "apiEndpoint": "{{proxyBaseUrl}}/duo/authentication",
+                "httpMethod": "GET",
+                "queryWindowInMin": 5,
+                "queryTimeFormat": "UnixTimestampInMills",
+                "startTimeAttributeName": "mintime",
+                "endTimeAttributeName": "maxtime",
+                "rateLimitQPS": 2,
+                "retryCount": 3,
+                "timeoutInSeconds": 120,
+                "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "Sentinel-CCF-Duo"
+                },
+                "queryParameters": {
+                    "limit": "1000",
+                    "sort": "ts:asc"
+                }
+            },
+            "paging": {
+                "pagingType": "NextPageToken",
+                "nextPageTokenJsonPath": "$.response.metadata.next_offset",
+                "nextPageParaName": "next_offset",
+                "pageSizeParaName": "limit",
+                "pageSize": 1000
+            },
+            "response": {
+                "eventsJsonPaths": [
+                    "$.response.authlogs"
+                ],
+                "format": "json",
+                "successStatusJsonPath": "$.stat",
+                "successStatusValue": "OK"
+            },
+            "isActive": true
+        }
+    },
+    {
+        "name": "DuoSecurityActivityPoller",
+        "apiVersion": "2022-10-01-preview",
+        "type": "Microsoft.SecurityInsights/dataConnectors",
+        "location": "{{location}}",
+        "kind": "RestApiPoller",
+        "properties": {
+            "connectorDefinitionName": "DuoSecurityCCF",
+            "dcrConfig": {
+                "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+                "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}",
+                "streamName": "Custom-DuoSecurityActivity_CL"
+            },
+            "dataType": "Duo Activity Logs v2",
+            "auth": {
+                "type": "APIKey",
+                "ApiKey": "{{functionKey}}",
+                "ApiKeyName": "x-functions-key",
+                "ApiKeyIdentifier": ""
+            },
+            "request": {
+                "apiEndpoint": "{{proxyBaseUrl}}/duo/activity",
+                "httpMethod": "GET",
+                "queryWindowInMin": 5,
+                "queryTimeFormat": "UnixTimestampInMills",
+                "startTimeAttributeName": "mintime",
+                "endTimeAttributeName": "maxtime",
+                "rateLimitQPS": 2,
+                "retryCount": 3,
+                "timeoutInSeconds": 120,
+                "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "Sentinel-CCF-Duo"
+                },
+                "queryParameters": {
+                    "limit": "1000",
+                    "sort": "ts:asc"
+                }
+            },
+            "paging": {
+                "pagingType": "NextPageToken",
+                "nextPageTokenJsonPath": "$.response.metadata.next_offset",
+                "nextPageParaName": "next_offset",
+                "pageSizeParaName": "limit",
+                "pageSize": 1000
+            },
+            "response": {
+                "eventsJsonPaths": [
+                    "$.response.items"
+                ],
+                "format": "json",
+                "successStatusJsonPath": "$.stat",
+                "successStatusValue": "OK"
+            },
+            "isActive": true
+        }
+    },
+    {
+        "name": "DuoSecurityTelephonyPoller",
+        "apiVersion": "2022-10-01-preview",
+        "type": "Microsoft.SecurityInsights/dataConnectors",
+        "location": "{{location}}",
+        "kind": "RestApiPoller",
+        "properties": {
+            "connectorDefinitionName": "DuoSecurityCCF",
+            "dcrConfig": {
+                "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+                "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}",
+                "streamName": "Custom-DuoSecurityTelephony_CL"
+            },
+            "dataType": "Duo Telephony Logs v2",
+            "auth": {
+                "type": "APIKey",
+                "ApiKey": "{{functionKey}}",
+                "ApiKeyName": "x-functions-key",
+                "ApiKeyIdentifier": ""
+            },
+            "request": {
+                "apiEndpoint": "{{proxyBaseUrl}}/duo/telephony",
+                "httpMethod": "GET",
+                "queryWindowInMin": 5,
+                "queryTimeFormat": "UnixTimestampInMills",
+                "startTimeAttributeName": "mintime",
+                "endTimeAttributeName": "maxtime",
+                "rateLimitQPS": 2,
+                "retryCount": 3,
+                "timeoutInSeconds": 120,
+                "headers": {
+                    "Accept": "application/json",
+                    "User-Agent": "Sentinel-CCF-Duo"
+                },
+                "queryParameters": {
+                    "limit": "1000",
+                    "sort": "ts:asc"
+                }
+            },
+            "paging": {
+                "pagingType": "NextPageToken",
+                "nextPageTokenJsonPath": "$.response.metadata.next_offset",
+                "nextPageParaName": "next_offset",
+                "pageSizeParaName": "limit",
+                "pageSize": 1000
+            },
+            "response": {
+                "eventsJsonPaths": [
+                    "$.response.items"
+                ],
+                "format": "json",
+                "successStatusJsonPath": "$.stat",
+                "successStatusValue": "OK"
+            },
+            "isActive": true
+        }
+    }
+]
