@@ -110,6 +110,16 @@ az deployment group create -g <rg> --template-file solution/Package/mainTemplate
 One-click deployable and portal "custom template"-loadable — but **not** the official Content Hub
 gallery format.
 
+> **Test it end-to-end in one command.** `deploy/test-package-deployment.sh` runs this whole path from
+> scratch — creates the workspace, deploys the proxy, builds the package, ARM-validates + deploys it, and
+> verifies (deployment state, rule/poller counts, parser resolution, data snapshot) with per-stage
+> PASS/FAIL. Preview with `--dry-run`; pair with `deploy/reset-test-env.sh` to re-test cleanly:
+> ```bash
+> deploy/reset-test-env.sh --yes
+> deploy/test-package-deployment.sh --duo-host api-XXXX.duosecurity.com --duo-ikey DI... --duo-skey '<skey>' \
+>   --proxy-location centralus --wait-for-data 15
+> ```
+
 **A2 — Official Content Hub package** (marketplace / Partner Center):
 
 ```bash

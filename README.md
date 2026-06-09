@@ -81,7 +81,8 @@ signing-proxy/                 The thin HMAC signer (Azure Function, Python)
 deploy/                        deploy-proxy.sh · deploy-ingestion.sh · deploy-connector.sh · enable-connector.md
                                operations.md (hardening) · migration-runbook.md (legacy → CCF)
                                build-package.sh (in-repo deployable mainTemplate) · stage-for-packaging.sh (→ V3)
-                               reset-test-env.sh (guarded teardown for from-scratch re-testing)
+                               reset-test-env.sh (guarded teardown) · test-package-deployment.sh
+                                 (one-command from-scratch package deploy + per-stage verify)
 tests/                         sample v2 payloads + unit tests for the proxy
 ```
 
