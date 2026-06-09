@@ -10,13 +10,27 @@
 - **Scope:** Trust Monitor (end-of-life) and all v1 log endpoints (administrator, offline_enrollment) are
   intentionally not carried over. The v2 **activity** stream is the supported successor to the v1
   administrator log.
-- **Admin-activity action mapping (validated against live v2 data):** the authentication-based detections and
-  hunts are fully working end to end. The v2 activity log exposes the action name at `action.name` (an
-  object) and uses a different taxonomy than the v1 administrator log - observed values include
-  `admin_sync_begin`/`admin_sync_finish`, `admin_activate_duo_push`, `phone_activation_code_regenerated`. The
-  admin-centric rules/hunts filter on v1 names (`admin_create`, `user_delete`, `admin_2fa_error`,
-  `admin_login_error`, `admin_reset_password`, `ad_sync_failed`), which do **not** match the v2 names, so
-  those detections are **adapted but dormant** until the v2->v1 mapping is completed against a production
-  tenant (the demo tenant does not exercise create/delete/login-failure admin events). The parser passes the
-  raw v2 `action.name` through to `DvcAction`, so analysts can hunt on the real v2 actions today; extend the
-  `CiscoDuo` activity branch's mapping as production action names are confirmed.
+- **Admin-activity action mapping (validated against two live tenants):** the authentication-based detections
+  and hunts are fully working end to end. The v2 activity log carries the action name at `action.name`;
+  `action.result` is null - an event's outcome is encoded in the action *name* (e.g. `*_sync_failure`).
+  Harvested across tenants (180 days, ~28k events, 35+ distinct actions), the v2 taxonomy preserves the v1
+  `<noun>_<verb>` convention. **Confirmed present with v1-matching names:** `admin_login`, `user_create`,
+  `user_delete`, `group_create`, `group_delete`, `integration_create`/`update`, `policy_create`/`update`,
+  `admin_update`, the sync events `admin_sync_*`/`entra_sync_*`, and the failure action
+  `management_system_sync_failure`. The parser routes activity `DvcAction` through `DuoActivityActionMap`
+  (pass-through by default).
+
+  Per-rule status:
+  - **Confirmed firing** - *Multiple users deleted* & *Deleted users* hunt (`user_delete`), *New users* hunt
+    (`user_create`), and the user/group lifecycle hunts (exact v2 names verified present).
+  - **Mapped** - *AD sync failed*: `DuoActivityActionMap` translates the `*_sync_failure` actions
+    (`management_system_sync_failure` confirmed; `admin_/entra_/directory_sync_failure` inferred from the
+    `*_sync_finish` vs `*_sync_failure` pattern) to `ad_sync_failed`, so the rule fires.
+  - **Expected (convention; not exercised in-window)** - *New admin* / *Admin user deleted*: v2 is expected to
+    use `admin_create`/`admin_delete` (parallel to the confirmed `user_`/`group_` CRUD names); pass-through
+    covers them. Confirm on a tenant that creates/deletes admins.
+  - **Re-sourced from the authentication log (now firing)** - *Admin 2FA failures* & *Admin failure
+    authentications*: the v2 activity log emits only successful `admin_login`, so these two hunts now query
+    the authentication log filtered to the Duo Admin Panel application (`SrcAppName contains "Admin Panel"`)
+    for non-successful results. Validated against live data (denied admin-panel sign-ins with reasons such as
+    `locked_out`, `user_mistake`, `out_of_date`).

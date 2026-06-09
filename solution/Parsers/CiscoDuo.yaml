@@ -25,6 +25,23 @@ FunctionQuery: |
         User:string, Alias:string, Context:string, Phone:string, SrcDomainType:string, Credits:real,
         IsoTimestamp:string, EventEndTime:datetime
     )[];
+    // v2 activity action.name -> legacy v1 administrator DvcAction, for the admin analytic/hunting rules.
+    // Validated against live tenants (180d). The v2 taxonomy preserves the v1 <noun>_<verb> convention, so
+    // most actions pass through with names the rules already match (CONFIRMED present: admin_login,
+    // user_create, user_delete, group_create, group_delete, integration_create/update, policy_create/update,
+    // admin_update, ...). Only the differences below need remapping; unmapped actions fall through to the raw
+    // v2 action.name so analysts can hunt on native actions. NOTE: v2 activity action.result is null - an
+    // event's outcome is encoded in the action NAME (e.g. the *_sync_failure actions below).
+    let DuoActivityActionMap = datatable(v2action:string, v1action:string)[
+        // Directory/identity sync failures -> v1 'ad_sync_failed' (management_system_sync_failure CONFIRMED
+        // observed; admin_/entra_/directory_ variants inferred from the *_sync_finish vs *_sync_failure pattern):
+        'management_system_sync_failure', 'ad_sync_failed',
+        'admin_sync_failure', 'ad_sync_failed',
+        'entra_sync_failure', 'ad_sync_failed',
+        'directory_sync_failure', 'ad_sync_failed'
+        // Admin login/2FA FAILURES are not emitted to the activity log (only successful admin_login is), so
+        // those detections must be sourced from the authentication log; intentionally left unmapped here.
+    ];
     // ---- Legacy branch: CiscoDuo_CL (HTTP Data Collector API table; present only after a prior install) ----
     let LegacyDuo = union isfuzzy=true (datatable(TimeGenerated:datetime)[]), CiscoDuo_CL
         | extend _desc = parse_json(column_ifexists('description_s',''))
@@ -104,20 +121,19 @@ FunctionQuery: |
             IsoTimestamp = tostring(column_ifexists('isotimestamp','')),
             EventEndTime = todatetime(column_ifexists('isotimestamp',''));
     // ---- Activity branch: /admin/v2/logs/activity (v2 successor to the v1 administrator log) ----
-    // Confirmed against live data: action/actor/target are objects; the action name is action.name
-    // (e.g. "admin_sync_begin", "phone_activation_code_regenerated"). DvcAction passes the v2 action
-    // name through. The legacy admin analytic/hunting rules filter on v1 action names
-    // (admin_create, user_delete, admin_2fa_error, admin_login_error, admin_reset_password,
-    // ad_sync_failed); those v1 names differ from the v2 taxonomy, so the admin-centric rules require
-    // a production-validated v2->v1 mapping here before they fire (see solution/ReleaseNotes.md).
+    // action/actor/target are objects; the action name is action.name and its result (when present) is
+    // action.result. DvcAction is the v2 action.name remapped through DuoActivityActionMap where a v1
+    // equivalent is defined, else passed through unchanged so analysts can hunt on native v2 actions.
     let ActivityDuo = union isfuzzy=true (datatable(TimeGenerated:datetime)[]), DuoSecurityActivity_CL
         | extend _actor = column_ifexists('actor', dynamic({})), _target = column_ifexists('target', dynamic({})),
                  _action = column_ifexists('action', dynamic({}))
+        | extend v2action = tostring(_action.name)
+        | lookup kind=leftouter DuoActivityActionMap on v2action
         | project
             TimeGenerated = column_ifexists('TimeGenerated', datetime(null)),
             EventVendor = 'Cisco', EventProduct = 'Duo Security',
             EventType = 'administrator',
-            DvcAction = tostring(_action.name),
+            DvcAction = coalesce(v1action, v2action),
             EventResult = tostring(_action.result),
             EventResultDetails = '',
             DstUserName = tostring(_target.name),

@@ -1,7 +1,7 @@
 id: 7f10ca83-dd23-45fc-8aac-291d3195d641
 name: Cisco Duo - Admin failure authentications
 description: |
-  'Query searches admin failure authentication events.'
+  'Summarizes failed administrator sign-ins to the Duo Admin Panel (any non-successful authentication result) per admin and source IP, to spot brute-force or unauthorized admin access attempts. Sourced from the authentication log (admin-panel application), because the v2 activity log records only successful admin logins, not failures.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: DuoSecurityCCF
@@ -17,8 +17,10 @@ relevantTechniques:
 query: |
   CiscoDuo
   | where TimeGenerated > ago(24h)
-  | where DvcAction =~ "admin_login_error"
-  | project TimeGenerated, SrcIpAddr, DstUserName
+  | where EventType =~ "authentication"
+  | where SrcAppName contains "Admin Panel"
+  | where isnotempty(EventResult) and EventResult !~ "success"
+  | summarize FailureCount = count(), Results = make_set(EventResult, 10), Reasons = make_set(EventResultDetails, 10), FirstSeen = min(TimeGenerated), LastSeen = max(TimeGenerated) by DstUserName, SrcIpAddr, SrcAppName
   | extend AccountCustomEntity = DstUserName, IPCustomEntity = SrcIpAddr
 entityMappings:
   - entityType: Account

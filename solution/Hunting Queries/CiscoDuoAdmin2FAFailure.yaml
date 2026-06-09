@@ -1,7 +1,7 @@
 id: b85bc8ed-3b76-4a46-b28f-5749359d79f1
-name: Cisco Duo - Admin failure authentications
+name: Cisco Duo - Admin 2FA failures
 description: |
-  'Query searches for administrator issue completing secondary authentication.'
+  'Surfaces administrators who failed the second-factor (2FA) step when signing in to the Duo Admin Panel - the second factor was denied or marked fraudulent. Sourced from the authentication log (admin-panel application), because the v2 activity log records only successful admin logins, not failures.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: DuoSecurityCCF
@@ -12,13 +12,17 @@ requiredDataConnectors:
       - CiscoDuo
 tactics:
   - InitialAccess
+  - CredentialAccess
 relevantTechniques:
   - T1078
+  - T1621
 query: |
   CiscoDuo
   | where TimeGenerated > ago(24h)
-  | where DvcAction =~ "admin_2fa_error"
-  | project TimeGenerated, SrcIpAddr, DstUserName
+  | where EventType =~ "authentication"
+  | where SrcAppName contains "Admin Panel"
+  | where EventResult in~ ("denied", "fraud")
+  | project TimeGenerated, DstUserName, SrcIpAddr, EventResult, EventResultDetails, AuthFactor, SrcAppName, AuthDeviceCountry
   | extend AccountCustomEntity = DstUserName, IPCustomEntity = SrcIpAddr
 entityMappings:
   - entityType: Account
