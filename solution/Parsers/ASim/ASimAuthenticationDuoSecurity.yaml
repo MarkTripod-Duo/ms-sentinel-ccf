@@ -1,7 +1,7 @@
 id: c37b8d8c-2393-45ca-9390-02a3271e5c65
 Parser:
   Title: ASIM Authentication parser for Cisco Duo Security
-  Version: '0.1.0'
+  Version: '0.1.1'
   LastUpdated: Jun 09 2026
 Product:
   Name: Cisco Duo Security
@@ -26,10 +26,11 @@ ParserQuery: |
       DuoSecurityAuthentication_CL
       | extend _ad = column_ifexists('access_device', dynamic({})),
                _app = column_ifexists('application', dynamic({})),
-               _usr = column_ifexists('user', dynamic({}))
+               _usr = column_ifexists('user', dynamic({})),
+               _reason = tostring(column_ifexists('reason', '')),
+               _factor = tostring(column_ifexists('factor', ''))
       | extend EventType = 'Logon',
                EventResult = iff(tostring(column_ifexists('result','')) =~ 'success', 'Success', 'Failure'),
-               EventResultDetails = tostring(column_ifexists('reason','')),
                EventStartTime = TimeGenerated,
                EventEndTime = TimeGenerated,
                EventCount = int(1),
@@ -43,7 +44,6 @@ ParserQuery: |
                TargetUserIdType = iff(isnotempty(tostring(_usr.key)), 'Other', ''),
                TargetUsernameType = iff(tostring(_usr.name) has '@', 'UPN', 'Simple'),
                TargetAppName = tostring(_app.name),
-               LogonMethod = tostring(column_ifexists('factor','')),
                SrcIpAddr = tostring(_ad.ip),
                SrcGeoCountry = tostring(_ad.location.country),
                SrcGeoCity = tostring(_ad.location.city)
@@ -52,7 +52,23 @@ ParserQuery: |
                User = TargetUsername,
                Dvc = SrcIpAddr,
                IpAddr = SrcIpAddr,
-               DvcIpAddr = SrcIpAddr
-      | project-away _ad, _app, _usr
+               DvcIpAddr = SrcIpAddr,
+               Src = SrcIpAddr,
+               Application = TargetAppName,
+               TargetAppType = 'Service',
+               EventSeverity = iff(EventResult =~ 'Success', 'Informational', 'Low'),
+               EventUid = EventOriginalUid,
+               EventResultDetails = case(
+                   EventResult =~ 'Success', '',
+                   _reason == 'locked_out', 'User locked',
+                   _reason == 'user_disabled', 'User disabled',
+                   _reason in ('out_of_date', 'denied_by_policy', 'user_not_in_permitted_group', 'anomalous_push', 'no_keys_available'), 'Logon violates policy',
+                   _reason == 'deny_unenrolled_user', 'No such user',
+                   'Other'),
+               LogonMethod = case(
+                   _factor in ('webauthn_credential', 'u2f_token', 'yubikey_code', 'fido2'), 'Passwordless',
+                   'Multi factor authentication'),
+               AdditionalFields = bag_pack('DuoFactor', _factor, 'DuoReason', _reason)
+      | project-away _ad, _app, _usr, _reason, _factor
   };
   parser()

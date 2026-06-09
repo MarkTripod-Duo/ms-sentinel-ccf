@@ -1,7 +1,7 @@
 id: 10cb1a09-07d8-4b08-b27e-721f248ee614
 Parser:
   Title: ASIM Authentication parser for Cisco Duo Security
-  Version: '0.1.0'
+  Version: '0.1.1'
   LastUpdated: Jun 09 2026
 Product:
   Name: Cisco Duo Security
@@ -70,7 +70,9 @@ ParserQuery: |
           and (isnull(endtime) or TimeGenerated <= endtime)
       | extend _ad = column_ifexists('access_device', dynamic({})),
                _app = column_ifexists('application', dynamic({})),
-               _usr = column_ifexists('user', dynamic({}))
+               _usr = column_ifexists('user', dynamic({})),
+               _reason = tostring(column_ifexists('reason', '')),
+               _factor = tostring(column_ifexists('factor', ''))
       | extend TargetUsername = tostring(_usr.name),
                SrcIpAddr = tostring(_ad.ip),
                TargetAppName = tostring(_app.name)
@@ -80,7 +82,6 @@ ParserQuery: |
           and (array_length(srchostname_has_any) == 0)
       | extend EventType = 'Logon',
                EventResult = iff(tostring(column_ifexists('result','')) =~ 'success', 'Success', 'Failure'),
-               EventResultDetails = tostring(column_ifexists('reason','')),
                EventStartTime = TimeGenerated,
                EventEndTime = TimeGenerated,
                EventCount = int(1),
@@ -92,7 +93,6 @@ ParserQuery: |
                TargetUserId = tostring(_usr.key),
                TargetUserIdType = iff(isnotempty(tostring(_usr.key)), 'Other', ''),
                TargetUsernameType = iff(tostring(_usr.name) has '@', 'UPN', 'Simple'),
-               LogonMethod = tostring(column_ifexists('factor','')),
                SrcGeoCountry = tostring(_ad.location.country),
                SrcGeoCity = tostring(_ad.location.city)
       | extend ActorUsername = TargetUsername,
@@ -100,11 +100,27 @@ ParserQuery: |
                User = TargetUsername,
                Dvc = SrcIpAddr,
                IpAddr = SrcIpAddr,
-               DvcIpAddr = SrcIpAddr
+               DvcIpAddr = SrcIpAddr,
+               Src = SrcIpAddr,
+               Application = TargetAppName,
+               TargetAppType = 'Service',
+               EventSeverity = iff(EventResult =~ 'Success', 'Informational', 'Low'),
+               EventUid = EventOriginalUid,
+               EventResultDetails = case(
+                   EventResult =~ 'Success', '',
+                   _reason == 'locked_out', 'User locked',
+                   _reason == 'user_disabled', 'User disabled',
+                   _reason in ('out_of_date', 'denied_by_policy', 'user_not_in_permitted_group', 'anomalous_push', 'no_keys_available'), 'Logon violates policy',
+                   _reason == 'deny_unenrolled_user', 'No such user',
+                   'Other'),
+               LogonMethod = case(
+                   _factor in ('webauthn_credential', 'u2f_token', 'yubikey_code', 'fido2'), 'Passwordless',
+                   'Multi factor authentication'),
+               AdditionalFields = bag_pack('DuoFactor', _factor, 'DuoReason', _reason)
       | where (array_length(eventtype_in) == 0 or EventType in~ (eventtype_in))
           and (array_length(eventresultdetails_in) == 0 or EventResultDetails in~ (eventresultdetails_in))
           and (eventresult == '*' or EventResult == eventresult)
-      | project-away _ad, _app, _usr
+      | project-away _ad, _app, _usr, _reason, _factor
   };
   parser(
       starttime=starttime,
