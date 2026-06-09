@@ -1,0 +1,33 @@
+id: 2d9855ce-1d1a-4605-a27f-10e7ea02de91
+name: Cisco Duo - Admin user created
+description: |
+  'Detects when new admin user is created.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: DuoSecurityCCF
+    dataTypes:
+      - CiscoDuo
+  - connectorId: CiscoDuoSecurity
+    dataTypes:
+      - CiscoDuo
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Persistence
+  - PrivilegeEscalation
+relevantTechniques:
+  - T1078
+query: |
+  CiscoDuo
+  | where DvcAction =~ "admin_create"
+  | extend AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

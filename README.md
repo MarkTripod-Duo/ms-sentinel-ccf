@@ -63,7 +63,12 @@ solution/                      Codeless CCF artifacts (Content-Hub packageable)
     DuoSecurity_PollingConfig.json              3 RestApiPoller connections (one array, one per stream)
     DuoSecurity_DCR.json                        3 streams + 3 transforms
     DuoSecurity_Tables.json                     3 custom *_CL tables
-  Data/Solution_DuoSecurityCCF.json             V3 packaging input
+  Parsers/CiscoDuo.yaml                         Backward-compat parser (new tables + legacy CiscoDuo_CL)
+  Parsers/ASim/{vim,ASim}AuthenticationDuoSecurity.yaml   ASIM Authentication normalization
+  Analytic Rules/*.yaml                         10 detections + a connector data-ingestion-stopped rule
+  Hunting Queries/*.yaml                        10 hunting queries
+  Workbooks/CiscoDuo.json                       Cisco Duo overview workbook
+  Data/Solution_DuoSecurityCCF.json             V3 packaging input (lists all of the above)
   SolutionMetadata.json
   ReleaseNotes.md
 signing-proxy/                 The thin HMAC signer (Azure Function, Python)
@@ -85,11 +90,12 @@ same pattern; add a 4th route/poller/table to enable it.*
 
 ### Querying note
 
-Log Analytics **capitalizes the first letter of every custom column** on ingestion, so although the
-schema mirrors Duo's lowercase JSON keys, you query the capitalized forms — `Result`, `Event_type`,
-`Access_device`, `Txid`, `Telephony_type`, etc. (nested JSON property names inside `dynamic` columns
-are unchanged, e.g. `tostring(Actor.name)`). `TimeGenerated` is set from each event's
-`isotimestamp` / `ts` by the DCR transform.
+Table columns are **lowercase snake_case**, mirroring Duo's v2 JSON keys (`result`, `event_type`,
+`access_device`, `txid`, `telephony_type`, …); nested objects are `dynamic` and queried by JSON path
+(e.g. `tostring(access_device.ip)`, `tostring(actor.name)`, `tostring(action.name)`). `TimeGenerated`
+is derived from each event's `isotimestamp` / `ts` by the DCR transform. (The Azure CLI `-o table`
+renderer title-cases column *headers* for display only — the stored names are lowercase, as
+`getschema` confirms.)
 
 ## Deploy (summary — see [`deploy/enable-connector.md`](deploy/enable-connector.md))
 

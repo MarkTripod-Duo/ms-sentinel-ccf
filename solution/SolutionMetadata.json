@@ -1,15 +1,15 @@
 {
-  "publisherId": "",
-  "offerId": "azure-sentinel-solution-ciscoduo-ccf",
-  "firstPublishDate": "2026-06-08",
+  "publisherId": "cisco",
+  "offerId": "azure-sentinel-solution-ciscoduosecurity-ccf",
+  "firstPublishDate": "2026-06-09",
   "providers": ["Cisco"],
   "categories": {
-    "domains": ["Security - Threat Protection", "Identity"]
+    "domains": ["Identity", "Security - Threat Protection"]
   },
   "support": {
-    "name": "Community",
+    "name": "Cisco Duo",
     "email": "set-your-email@example.com",
-    "tier": "Community",
-    "link": "https://github.com/"
+    "tier": "Partner",
+    "link": "https://duo.com/support"
   }
 }

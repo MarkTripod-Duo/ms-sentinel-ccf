@@ -1,0 +1,31 @@
+id: b85bc8ed-3b76-4a46-b28f-5749359d79f1
+name: Cisco Duo - Admin failure authentications
+description: |
+  'Query searches for administrator issue completing secondary authentication.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: DuoSecurityCCF
+    dataTypes:
+      - CiscoDuo
+  - connectorId: CiscoDuoSecurity
+    dataTypes:
+      - CiscoDuo
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  CiscoDuo
+  | where TimeGenerated > ago(24h)
+  | where DvcAction =~ "admin_2fa_error"
+  | project TimeGenerated, SrcIpAddr, DstUserName
+  | extend AccountCustomEntity = DstUserName, IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

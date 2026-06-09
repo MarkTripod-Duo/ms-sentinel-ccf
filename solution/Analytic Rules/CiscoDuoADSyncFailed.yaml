@@ -1,0 +1,32 @@
+id: f73edd25-38a9-4c66-991a-59bb70ee4483
+name: Cisco Duo - AD sync failed
+description: |
+  'Detects when AD syncronization failed.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: DuoSecurityCCF
+    dataTypes:
+      - CiscoDuo
+  - connectorId: CiscoDuoSecurity
+    dataTypes:
+      - CiscoDuo
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1489
+query: |
+  CiscoDuo
+  | where DvcAction =~ "ad_sync_failed"
+  | extend IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity
+version: 1.0.0
+kind: Scheduled

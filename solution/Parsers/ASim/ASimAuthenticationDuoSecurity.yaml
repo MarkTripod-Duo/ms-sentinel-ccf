@@ -1,0 +1,58 @@
+id: c37b8d8c-2393-45ca-9390-02a3271e5c65
+Parser:
+  Title: ASIM Authentication parser for Cisco Duo Security
+  Version: '0.1.0'
+  LastUpdated: Jun 09 2026
+Product:
+  Name: Cisco Duo Security
+Normalization:
+  Schema: Authentication
+  Version: '0.1.3'
+References:
+- Title: ASIM Authentication Schema
+  Link: https://aka.ms/ASimAuthenticationDoc
+- Title: ASIM
+  Link: https://aka.ms/AboutASIM
+- Title: Cisco Duo Admin API
+  Link: https://duo.com/docs/adminapi
+Description: |
+  This ASIM parser normalizes Cisco Duo Admin API v2 authentication logs (DuoSecurityAuthentication_CL),
+  ingested via the Codeless Connector Framework, to the ASIM Authentication normalized schema. This is
+  the parameter-less version; use vimAuthenticationDuoSecurity for filtering pushdown.
+ParserName: ASimAuthenticationDuoSecurity
+EquivalentBuiltInParser: _ASim_Authentication_DuoSecurity
+ParserQuery: |
+  let parser = () {
+      DuoSecurityAuthentication_CL
+      | extend _ad = column_ifexists('access_device', dynamic({})),
+               _app = column_ifexists('application', dynamic({})),
+               _usr = column_ifexists('user', dynamic({}))
+      | extend EventType = 'Logon',
+               EventResult = iff(tostring(column_ifexists('result','')) =~ 'success', 'Success', 'Failure'),
+               EventResultDetails = tostring(column_ifexists('reason','')),
+               EventStartTime = TimeGenerated,
+               EventEndTime = TimeGenerated,
+               EventCount = int(1),
+               EventProduct = 'Duo Security',
+               EventVendor = 'Cisco',
+               EventSchema = 'Authentication',
+               EventSchemaVersion = '0.1.3',
+               EventOriginalUid = tostring(column_ifexists('txid','')),
+               TargetUsername = tostring(_usr.name),
+               TargetUserId = tostring(_usr.key),
+               TargetUserIdType = iff(isnotempty(tostring(_usr.key)), 'Other', ''),
+               TargetUsernameType = iff(tostring(_usr.name) has '@', 'UPN', 'Simple'),
+               TargetAppName = tostring(_app.name),
+               LogonMethod = tostring(column_ifexists('factor','')),
+               SrcIpAddr = tostring(_ad.ip),
+               SrcGeoCountry = tostring(_ad.location.country),
+               SrcGeoCity = tostring(_ad.location.city)
+      | extend ActorUsername = TargetUsername,
+               ActorUsernameType = TargetUsernameType,
+               User = TargetUsername,
+               Dvc = SrcIpAddr,
+               IpAddr = SrcIpAddr,
+               DvcIpAddr = SrcIpAddr
+      | project-away _ad, _app, _usr
+  };
+  parser()

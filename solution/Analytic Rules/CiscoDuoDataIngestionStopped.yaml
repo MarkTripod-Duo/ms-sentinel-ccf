@@ -1,0 +1,32 @@
+id: 6a36e0d2-d85a-438f-b398-7e847dfc8d6d
+name: Cisco Duo - Data ingestion stopped
+description: |
+  'Identifies when the Cisco Duo CCF connector has stopped ingesting data. Fires when no Duo events (authentication, activity, or telephony) have arrived for longer than the configured threshold while the connector was recently active - typically indicating a broken signing proxy, rotated/expired Duo API credentials, or a disabled poller.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: DuoSecurityCCF
+    dataTypes:
+      - CiscoDuo
+queryFrequency: 1h
+queryPeriod: 14d
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1499
+query: |
+  let Lookback = 14d;   // only consider connectors that were active in this window
+  let Threshold = 3h;   // alert if no data has arrived for this long
+  union isfuzzy=true
+      (DuoSecurityAuthentication_CL | where TimeGenerated > ago(Lookback)),
+      (DuoSecurityActivity_CL       | where TimeGenerated > ago(Lookback)),
+      (DuoSecurityTelephony_CL      | where TimeGenerated > ago(Lookback))
+  | summarize LastEventTime = max(TimeGenerated)
+  | where isnotempty(LastEventTime)
+  | where now() - LastEventTime > Threshold
+  | extend HoursSinceLastEvent = datetime_diff('hour', now(), LastEventTime)
+  | extend AlertDetail = strcat('No Cisco Duo data ingested for ', HoursSinceLastEvent, ' hours (last event at ', format_datetime(LastEventTime, 'yyyy-MM-dd HH:mm:ss'), ' UTC).')
+version: 1.0.0
+kind: Scheduled

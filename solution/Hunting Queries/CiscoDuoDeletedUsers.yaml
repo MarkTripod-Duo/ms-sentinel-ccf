@@ -1,0 +1,31 @@
+id: 9edf2ce5-e0dc-46fc-9b6a-a371f0f31a1a
+name: Cisco Duo - Deleted users
+description: |
+  'Query searches for deleted users.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: DuoSecurityCCF
+    dataTypes:
+      - CiscoDuo
+  - connectorId: CiscoDuoSecurity
+    dataTypes:
+      - CiscoDuo
+tactics:
+  - Impact
+relevantTechniques:
+  - T1531
+query: |
+  CiscoDuo
+  | where TimeGenerated > ago(24h)
+  | where DvcAction =~ "user_delete"
+  | project TimeGenerated, SrcIpAddr, SrcUserName, DstUserName
+  | extend AccountCustomEntity = SrcUserName, IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

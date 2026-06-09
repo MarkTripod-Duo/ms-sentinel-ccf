@@ -1,0 +1,35 @@
+id: e3e9be17-1a73-4a57-9b48-09e5c2d87d10
+name: Cisco Duo - Multiple admin 2FA failures
+description: |
+  'Detects when multiple admin 2FA failures occurs.'
+severity: High
+status: Available
+requiredDataConnectors:
+  - connectorId: DuoSecurityCCF
+    dataTypes:
+      - CiscoDuo
+  - connectorId: CiscoDuoSecurity
+    dataTypes:
+      - CiscoDuo
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  let threshold = 10;
+  CiscoDuo
+  | where DvcAction =~ "admin_2fa_error"
+  | summarize count() by DstUserName, bin(TimeGenerated, 10m)
+  | where count_ > threshold
+  | extend AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.1
+kind: Scheduled 

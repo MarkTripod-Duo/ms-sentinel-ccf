@@ -1,0 +1,32 @@
+id: 7d995d30-14fb-4b93-81a5-e5d4a0c51d86
+name: Cisco Duo - Devices with unsecure settings
+description: |
+  'Query searches for devices with unsecure settings.'
+severity: Medium
+requiredDataConnectors:
+  - connectorId: DuoSecurityCCF
+    dataTypes:
+      - CiscoDuo
+  - connectorId: CiscoDuoSecurity
+    dataTypes:
+      - CiscoDuo
+tactics:
+  - InitialAccess
+relevantTechniques:
+  - T1078
+query: |
+  CiscoDuo
+  | where TimeGenerated > ago(24h)
+  | where EventType =~ 'authentication'
+  | where  AccessDvcEncryptionEnabled == False or AccessDvcFirewallEnabled == False or AccessDvcPasswordSet == False
+  | project TimeGenerated, SrcIpAddr, DstUserName
+  | extend AccountCustomEntity = DstUserName, IPCustomEntity = SrcIpAddr
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+  - entityType: IP
+    fieldMappings:
+      - identifier: Address
+        columnName: IPCustomEntity

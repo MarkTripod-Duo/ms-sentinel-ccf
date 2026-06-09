@@ -1,0 +1,32 @@
+id: 52e0cf75-9bb6-4e1b-a60f-ab6e27ed6a7b
+name: Cisco Duo - Admin user deleted
+description: |
+  'Detects when admin user is deleted.'
+severity: Medium
+status: Available
+requiredDataConnectors:
+  - connectorId: DuoSecurityCCF
+    dataTypes:
+      - CiscoDuo
+  - connectorId: CiscoDuoSecurity
+    dataTypes:
+      - CiscoDuo
+queryFrequency: 1h
+queryPeriod: 1h
+triggerOperator: gt
+triggerThreshold: 0
+tactics:
+  - Impact
+relevantTechniques:
+  - T1531
+query: |
+  CiscoDuo
+  | where DvcAction =~ "admin_delete"
+  | extend AccountCustomEntity = DstUserName
+entityMappings:
+  - entityType: Account
+    fieldMappings:
+      - identifier: Name
+        columnName: AccountCustomEntity
+version: 1.0.0
+kind: Scheduled

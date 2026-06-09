@@ -1,0 +1,156 @@
+id: 59eed932-1f84-4115-b2fb-fe94fc2e88bb
+Function:
+  Title: Parser for CiscoDuo
+  Version: '2.0.0'
+  LastUpdated: '2026-06-09'
+Category: Microsoft Sentinel Parser
+FunctionName: CiscoDuo
+FunctionAlias: CiscoDuo
+FunctionQuery: |
+    // Backward-compatible Cisco Duo parser.
+    // Normalizes BOTH the new CCF/DCR tables (DuoSecurityAuthentication_CL, DuoSecurityActivity_CL,
+    // DuoSecurityTelephony_CL) AND the legacy HTTP Data Collector table (CiscoDuo_CL) into the same
+    // alias schema, so existing analytic rules / hunting queries / workbooks work unchanged and the
+    // old Azure Function connector and the new CCF connector can run side by side during migration.
+    // New-table columns are lowercase snake_case (mirroring the Duo JSON); nested objects are dynamic.
+    // union isfuzzy=true tolerates any source table being absent; the empty datatable seeds every
+    // alias column so queries never fail on a missing column.
+    let CiscoDuoSchema = datatable(
+        TimeGenerated:datetime, EventVendor:string, EventProduct:string, EventType:string, DvcAction:string,
+        EventResult:string, EventResultDetails:string, DstUserName:string, SrcUserName:string, SrcIpAddr:string,
+        AuthFactor:string, AccessDvcIpAddr:string, AccessDvcOs:string, AccessDvcOsVersion:string, AccessDvcBrowser:string,
+        AccessDvcEncryptionEnabled:string, AccessDvcFirewallEnabled:string, AccessDvcPasswordSet:string,
+        AuthDeviceCountry:string, AuthDeviceCity:string, DvcIpAddr:string, SrcHostname:string, SrcGeoCountry:string,
+        SrcGeoCity:string, SrcAppId:string, SrcAppName:string, TransactionId:string, SrcUserId:string, UserGroups:string,
+        User:string, Alias:string, Context:string, Phone:string, SrcDomainType:string, Credits:real,
+        IsoTimestamp:string, EventEndTime:datetime
+    )[];
+    // ---- Legacy branch: CiscoDuo_CL (HTTP Data Collector API table; present only after a prior install) ----
+    let LegacyDuo = union isfuzzy=true (datatable(TimeGenerated:datetime)[]), CiscoDuo_CL
+        | extend _desc = parse_json(column_ifexists('description_s',''))
+        | project
+            TimeGenerated = column_ifexists('TimeGenerated', datetime(null)),
+            EventVendor = 'Cisco', EventProduct = 'Duo Security',
+            EventType = iff(isnotempty(column_ifexists('eventtype_s','')), column_ifexists('eventtype_s',''), column_ifexists('event_type_s','')),
+            DvcAction = column_ifexists('action_s',''),
+            EventResult = column_ifexists('result_s',''),
+            EventResultDetails = column_ifexists('reason_s',''),
+            DstUserName = iff(isnotempty(column_ifexists('username_s','')), column_ifexists('username_s',''), column_ifexists('user_name_s','')),
+            SrcUserName = column_ifexists('object_s',''),
+            SrcIpAddr = iff(isnotempty(tostring(_desc['ip_address'])), tostring(_desc['ip_address']), column_ifexists('access_device_ip_s','')),
+            AuthFactor = column_ifexists('factor_s',''),
+            AccessDvcIpAddr = column_ifexists('access_device_ip_s',''),
+            AccessDvcOs = column_ifexists('access_device_os_s',''),
+            AccessDvcOsVersion = column_ifexists('access_device_os_version_s',''),
+            AccessDvcBrowser = column_ifexists('access_device_browser_s',''),
+            AccessDvcEncryptionEnabled = tostring(column_ifexists('access_device_is_encryption_enabled_b','')),
+            AccessDvcFirewallEnabled = tostring(column_ifexists('access_device_is_firewall_enabled_b','')),
+            AccessDvcPasswordSet = tostring(column_ifexists('access_device_is_password_set_b','')),
+            AuthDeviceCountry = column_ifexists('auth_device_location_country_s',''),
+            AuthDeviceCity = column_ifexists('auth_device_location_city_s',''),
+            DvcIpAddr = column_ifexists('auth_device_ip_s',''),
+            SrcHostname = column_ifexists('auth_device_name_s',''),
+            SrcGeoCountry = column_ifexists('access_device_location_country_s',''),
+            SrcGeoCity = column_ifexists('access_device_location_city_s',''),
+            SrcAppId = column_ifexists('application_key_s',''),
+            SrcAppName = column_ifexists('application_name_s',''),
+            TransactionId = tostring(column_ifexists('txid_g','')),
+            SrcUserId = column_ifexists('user_key_s',''),
+            UserGroups = tostring(column_ifexists('user_groups_s','')),
+            User = column_ifexists('email_s',''),
+            Alias = column_ifexists('alias_s',''),
+            Context = column_ifexists('context_s',''),
+            Phone = column_ifexists('phone_s',''),
+            SrcDomainType = column_ifexists('type_s',''),
+            Credits = todouble(column_ifexists('credits_d', real(null))),
+            IsoTimestamp = tostring(column_ifexists('isotimestamp_t','')),
+            EventEndTime = unixtime_seconds_todatetime(tolong(column_ifexists('timestamp_d', 0)));
+    // ---- Authentication branch: /admin/v2/logs/authentication ----
+    let AuthDuo = union isfuzzy=true (datatable(TimeGenerated:datetime)[]), DuoSecurityAuthentication_CL
+        | extend _ad = column_ifexists('access_device', dynamic({})), _authd = column_ifexists('auth_device', dynamic({})),
+                 _app = column_ifexists('application', dynamic({})), _usr = column_ifexists('user', dynamic({}))
+        | project
+            TimeGenerated = column_ifexists('TimeGenerated', datetime(null)),
+            EventVendor = 'Cisco', EventProduct = 'Duo Security',
+            EventType = tostring(column_ifexists('event_type','authentication')),
+            DvcAction = '',
+            EventResult = tostring(column_ifexists('result','')),
+            EventResultDetails = tostring(column_ifexists('reason','')),
+            DstUserName = tostring(_usr.name),
+            SrcUserName = '',
+            SrcIpAddr = tostring(_ad.ip),
+            AuthFactor = tostring(column_ifexists('factor','')),
+            AccessDvcIpAddr = tostring(_ad.ip),
+            AccessDvcOs = tostring(_ad.os),
+            AccessDvcOsVersion = tostring(_ad.os_version),
+            AccessDvcBrowser = tostring(_ad.browser),
+            AccessDvcEncryptionEnabled = tostring(_ad.is_encryption_enabled),
+            AccessDvcFirewallEnabled = tostring(_ad.is_firewall_enabled),
+            AccessDvcPasswordSet = tostring(_ad.is_password_set),
+            AuthDeviceCountry = tostring(_authd.location.country),
+            AuthDeviceCity = tostring(_authd.location.city),
+            DvcIpAddr = tostring(_authd.ip),
+            SrcHostname = tostring(_authd.name),
+            SrcGeoCountry = tostring(_ad.location.country),
+            SrcGeoCity = tostring(_ad.location.city),
+            SrcAppId = tostring(_app.key),
+            SrcAppName = tostring(_app.name),
+            TransactionId = tostring(column_ifexists('txid','')),
+            SrcUserId = tostring(_usr.key),
+            UserGroups = tostring(_usr.groups),
+            User = tostring(column_ifexists('email','')),
+            Alias = tostring(column_ifexists('alias','')),
+            Context = '', Phone = '', SrcDomainType = '', Credits = real(null),
+            IsoTimestamp = tostring(column_ifexists('isotimestamp','')),
+            EventEndTime = todatetime(column_ifexists('isotimestamp',''));
+    // ---- Activity branch: /admin/v2/logs/activity (v2 successor to the v1 administrator log) ----
+    // Confirmed against live data: action/actor/target are objects; the action name is action.name
+    // (e.g. "admin_sync_begin", "phone_activation_code_regenerated"). DvcAction passes the v2 action
+    // name through. The legacy admin analytic/hunting rules filter on v1 action names
+    // (admin_create, user_delete, admin_2fa_error, admin_login_error, admin_reset_password,
+    // ad_sync_failed); those v1 names differ from the v2 taxonomy, so the admin-centric rules require
+    // a production-validated v2->v1 mapping here before they fire (see solution/ReleaseNotes.md).
+    let ActivityDuo = union isfuzzy=true (datatable(TimeGenerated:datetime)[]), DuoSecurityActivity_CL
+        | extend _actor = column_ifexists('actor', dynamic({})), _target = column_ifexists('target', dynamic({})),
+                 _action = column_ifexists('action', dynamic({}))
+        | project
+            TimeGenerated = column_ifexists('TimeGenerated', datetime(null)),
+            EventVendor = 'Cisco', EventProduct = 'Duo Security',
+            EventType = 'administrator',
+            DvcAction = tostring(_action.name),
+            EventResult = tostring(_action.result),
+            EventResultDetails = '',
+            DstUserName = tostring(_target.name),
+            SrcUserName = tostring(_actor.name),
+            SrcIpAddr = tostring(column_ifexists('client_ip','')),
+            AuthFactor = '', AccessDvcIpAddr = '', AccessDvcOs = '', AccessDvcOsVersion = '', AccessDvcBrowser = '',
+            AccessDvcEncryptionEnabled = '', AccessDvcFirewallEnabled = '', AccessDvcPasswordSet = '',
+            AuthDeviceCountry = '', AuthDeviceCity = '', DvcIpAddr = '', SrcHostname = '',
+            SrcGeoCountry = '', SrcGeoCity = '',
+            SrcAppId = tostring(_target.key), SrcAppName = tostring(_target.type),
+            TransactionId = tostring(column_ifexists('activity_id','')),
+            SrcUserId = tostring(_actor.key), UserGroups = '',
+            User = tostring(_target.name), Alias = '', Context = '', Phone = '', SrcDomainType = '', Credits = real(null),
+            IsoTimestamp = tostring(column_ifexists('ts','')),
+            EventEndTime = todatetime(column_ifexists('ts',''));
+    // ---- Telephony branch: /admin/v2/logs/telephony ----
+    let TelephonyDuo = union isfuzzy=true (datatable(TimeGenerated:datetime)[]), DuoSecurityTelephony_CL
+        | project
+            TimeGenerated = column_ifexists('TimeGenerated', datetime(null)),
+            EventVendor = 'Cisco', EventProduct = 'Duo Security',
+            EventType = 'telephony',
+            DvcAction = '', EventResult = '', EventResultDetails = '',
+            DstUserName = '', SrcUserName = '', SrcIpAddr = '',
+            AuthFactor = '', AccessDvcIpAddr = '', AccessDvcOs = '', AccessDvcOsVersion = '', AccessDvcBrowser = '',
+            AccessDvcEncryptionEnabled = '', AccessDvcFirewallEnabled = '', AccessDvcPasswordSet = '',
+            AuthDeviceCountry = '', AuthDeviceCity = '', DvcIpAddr = '', SrcHostname = '',
+            SrcGeoCountry = '', SrcGeoCity = '', SrcAppId = '', SrcAppName = '',
+            TransactionId = tostring(column_ifexists('telephony_id','')), SrcUserId = '', UserGroups = '',
+            User = '', Alias = '',
+            Context = tostring(column_ifexists('context','')),
+            Phone = tostring(column_ifexists('phone','')),
+            SrcDomainType = tostring(column_ifexists('telephony_type','')),
+            Credits = todouble(column_ifexists('credits', real(null))),
+            IsoTimestamp = tostring(column_ifexists('ts', column_ifexists('isotimestamp',''))),
+            EventEndTime = todatetime(column_ifexists('ts', column_ifexists('isotimestamp','')));
+    union isfuzzy=true CiscoDuoSchema, LegacyDuo, AuthDuo, ActivityDuo, TelephonyDuo

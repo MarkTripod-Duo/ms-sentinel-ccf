@@ -1,10 +1,43 @@
 {
   "Name": "DuoSecurityCCF",
-  "Author": "Duo Sentinel CCF (community) - set-your-email@example.com",
+  "Author": "Cisco Duo - set-your-email@example.com",
   "Logo": "<img src=\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Logos/Cisco_Duo.svg\" width=\"75px\" height=\"75px\">",
-  "Description": "The **Cisco Duo Security (CCF)** solution ingests authentication, activity, and telephony logs from the [Duo Admin API v2](https://duo.com/docs/adminapi) into Microsoft Sentinel using the Codeless Connector Framework. Because the Duo Admin API requires per-request HMAC-SHA1 signing (which CCF cannot perform natively), the connector polls a lightweight signing proxy (an Azure Function deployed from this solution's `signing-proxy/`) that signs each request and forwards it to Duo.\n\n**Underlying Microsoft Technologies used:**\n\nThis solution depends on the [Codeless Connector Framework (CCF)](https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector) and DCR-based ingestion-time transformations, which may be in Preview and may incur additional ingestion or operational costs.",
+  "Description": "The **Cisco Duo Security (CCF)** solution ingests authentication, activity, and telephony logs from the [Duo Admin API v2](https://duo.com/docs/adminapi) into Microsoft Sentinel using the Codeless Connector Framework, as a forward-compatible replacement for the legacy Azure Function connector that uses the retiring HTTP Data Collector API. Because the Duo Admin API requires per-request HMAC-SHA1 signing (which CCF cannot perform natively), the connector polls a lightweight signing proxy (an Azure Function deployed from this solution's `signing-proxy/`) that signs each request and forwards it to Duo. A backward-compatible `CiscoDuo` parser normalizes both the new `DuoSecurity*_CL` tables and the legacy `CiscoDuo_CL` table, so existing analytic rules, hunting queries, and workbooks continue to work and both connectors can run side by side during migration.\n\n**Underlying Microsoft Technologies used:**\n\nThis solution depends on the [Codeless Connector Framework (CCF)](https://learn.microsoft.com/en-us/azure/sentinel/create-codeless-connector) and DCR-based ingestion-time transformations, which may be in Preview and may incur additional ingestion or operational costs.",
   "Data Connectors": [
     "Data Connectors/DuoSecurityCCF_ccp/DuoSecurity_DataConnectorDefinition.json"
+  ],
+  "Parsers": [
+    "Parsers/CiscoDuo.yaml",
+    "Parsers/ASim/ASimAuthenticationDuoSecurity.yaml",
+    "Parsers/ASim/vimAuthenticationDuoSecurity.yaml"
+  ],
+  "Analytic Rules": [
+    "Analytic Rules/CiscoDuoADSyncFailed.yaml",
+    "Analytic Rules/CiscoDuoAdminDeleted.yaml",
+    "Analytic Rules/CiscoDuoAdminMFAFailures.yaml",
+    "Analytic Rules/CiscoDuoAdminPasswordReset.yaml",
+    "Analytic Rules/CiscoDuoMultipleUserLoginFailures.yaml",
+    "Analytic Rules/CiscoDuoMultipleUsersDeleted.yaml",
+    "Analytic Rules/CiscoDuoNewAccessDevice.yaml",
+    "Analytic Rules/CiscoDuoNewAdmin.yaml",
+    "Analytic Rules/CiscoDuoNewAuthDeviceLocation.yaml",
+    "Analytic Rules/CiscoDuoUnexpectedAuthFactor.yaml",
+    "Analytic Rules/CiscoDuoDataIngestionStopped.yaml"
+  ],
+  "Hunting Queries": [
+    "Hunting Queries/CiscoDuoAdmin2FAFailure.yaml",
+    "Hunting Queries/CiscoDuoAdminDeleteActions.yaml",
+    "Hunting Queries/CiscoDuoAdminFailure.yaml",
+    "Hunting Queries/CiscoDuoAuthenticationErrorEvents.yaml",
+    "Hunting Queries/CiscoDuoAuthenticationErrorReasons.yaml",
+    "Hunting Queries/CiscoDuoDeletedUsers.yaml",
+    "Hunting Queries/CiscoDuoFraudAuthentication.yaml",
+    "Hunting Queries/CiscoDuoNewUsers.yaml",
+    "Hunting Queries/CiscoDuoUnpachedAccessDevices.yaml",
+    "Hunting Queries/CiscoDuoUnsecuredDevices.yaml"
+  ],
+  "Workbooks": [
+    "Workbooks/CiscoDuo.json"
   ],
   "BasePath": "/Users/matripod/code/ms-sentinel-ccf/solution",
   "Version": "1.0.0",
