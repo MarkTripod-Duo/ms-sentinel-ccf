@@ -25,6 +25,11 @@
       "type": "string",
       "defaultValue": "[resourceGroup().location]",
       "metadata": { "description": "Azure region for all resources." }
+    },
+    "mintimeLookbackSeconds": {
+      "type": "string",
+      "defaultValue": "0",
+      "metadata": { "description": "Optional zero-gap overlap: re-query this many seconds of recent history on each poll to offset Duo's ~2-minute availability delay. 0 = off (default). When >0, de-duplicate by txid at query time." }
     }
   },
   "variables": {
@@ -111,6 +116,7 @@
             { "name": "APPLICATIONINSIGHTS_CONNECTION_STRING", "value": "[reference(resourceId('Microsoft.Insights/components', variables('appInsightsName')), '2020-02-02').ConnectionString]" },
             { "name": "DUO_IKEY", "value": "[parameters('duoIkey')]" },
             { "name": "DUO_API_HOST", "value": "[parameters('duoApiHost')]" },
+            { "name": "DUO_MINTIME_LOOKBACK_SECONDS", "value": "[parameters('mintimeLookbackSeconds')]" },
             { "name": "DUO_SKEY", "value": "[concat('@Microsoft.KeyVault(VaultName=', variables('keyVaultName'), ';SecretName=', variables('skeySecretName'), ')')]" }
           ]
         }

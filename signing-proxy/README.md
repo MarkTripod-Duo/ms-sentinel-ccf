@@ -28,6 +28,7 @@ For each inbound CCF poll it:
 | `DUO_IKEY` | Duo Admin API integration key (`DI…`) |
 | `DUO_API_HOST` | `api-XXXXXXXX.duosecurity.com` |
 | `DUO_SKEY` | **Key Vault reference** → `@Microsoft.KeyVault(VaultName=…;SecretName=DUO-SKEY)` |
+| `DUO_MINTIME_LOOKBACK_SECONDS` | Optional zero-gap overlap (seconds of recent history re-queried each poll). `0` = off (default). See [operations.md](../deploy/operations.md#1-data-completeness-the-zero-gap-consideration). |
 
 `azuredeploy.json` provisions the Function App (system-assigned identity), Storage, Application
 Insights, and a Key Vault holding `skey`, and grants the identity **Key Vault Secrets User**.
@@ -67,9 +68,8 @@ curl "http://localhost:7071/api/duo/authentication?mintime=1717200000000&maxtime
 
 Expect `{"stat": "OK", "response": {"authlogs": [...], "metadata": {...}}}`.
 
-## Multi-account variant (optional)
+## Production hardening
 
-The default is **one Duo account per proxy** (ikey/host/skey in config). To serve several Duo
-accounts from one proxy: have CCF pass `ikey` (and optionally `host`) as query params, look up the
-matching `skey` in Key Vault by ikey, and strip those two params before signing (Duo must not
-receive them). Keep them in `_CONTROL_PARAMS` so they are never forwarded to Duo.
+See [`../deploy/operations.md`](../deploy/operations.md) for the zero-gap data-completeness knob,
+Duo `skey` rotation, the **multi-Duo-account** variant, and networking/scaling guidance — and
+[`../deploy/migration-runbook.md`](../deploy/migration-runbook.md) for the legacy → CCF cutover.

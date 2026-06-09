@@ -55,3 +55,26 @@ def ensure_https(url: str) -> str:
     if url.startswith(("http://", "https://")):
         return url
     return "https://" + url
+
+
+def apply_mintime_lookback(params: dict, lookback_seconds: int) -> dict:
+    """Subtract a lookback overlap from ``mintime`` (epoch milliseconds) so each poll re-queries
+    recent history.
+
+    Microsoft Sentinel CCF advances its incremental checkpoint on the wall-clock *last run time*,
+    not on the last event timestamp, and cannot persist a custom cursor across runs. Combined with
+    Duo's ~2-minute availability delay, that leaves a trailing-edge gap: events that aren't yet
+    available when a poll runs fall before the next poll's start time and are skipped. Widening
+    ``mintime`` backward by an overlap re-fetches that window on the next poll so nothing is lost.
+    The overlap re-ingests events already seen, so enable query-time de-duplication by ``txid``.
+
+    No-op when ``lookback_seconds <= 0`` or ``mintime`` is absent / non-numeric. Returns a new dict
+    when it changes anything; otherwise returns the input unchanged.
+    """
+    if lookback_seconds <= 0:
+        return params
+    mintime = params.get("mintime")
+    if mintime is not None and str(mintime).lstrip("-").isdigit():
+        params = dict(params)
+        params["mintime"] = str(int(mintime) - lookback_seconds * 1000)
+    return params

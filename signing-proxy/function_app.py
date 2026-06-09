@@ -28,11 +28,23 @@ import urllib.request
 import azure.functions as func
 from duo_hmac.duo_hmac import DuoHmac
 
-from duo_proxy_core import duo_path_for, ensure_https, filter_params, normalize_next_offset
+from duo_proxy_core import (
+    apply_mintime_lookback,
+    duo_path_for,
+    ensure_https,
+    filter_params,
+    normalize_next_offset,
+)
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
 
 _DUO_REQUEST_TIMEOUT_SECONDS = 60
+
+# Optional: re-query this many seconds of recent history on each poll to close the trailing-edge gap
+# from Duo's ~2-minute availability delay (CCF advances its checkpoint on wall-clock last-run-time, so
+# fresh-but-not-yet-available events would otherwise be skipped). 0 = off (default). When enabled,
+# de-duplicate by txid at query time. See signing-proxy/README.md.
+_MINTIME_LOOKBACK_SECONDS = int(os.environ.get("DUO_MINTIME_LOOKBACK_SECONDS", "0") or "0")
 
 
 def _duo_credentials() -> tuple[str, str, str]:
@@ -58,6 +70,7 @@ def duo_logs(req: func.HttpRequest) -> func.HttpResponse:
 
     try:
         params = filter_params(dict(req.params))  # mintime, maxtime, limit, next_offset, sort, ...
+        params = apply_mintime_lookback(params, _MINTIME_LOOKBACK_SECONDS)
         ikey, skey, host = _duo_credentials()
         url, _body, headers = DuoHmac(ikey, skey, host).get_authentication_components(
             "GET", duo_path, params, {}

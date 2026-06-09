@@ -73,7 +73,8 @@ solution/                      Codeless CCF artifacts (Content-Hub packageable)
   ReleaseNotes.md
 signing-proxy/                 The thin HMAC signer (Azure Function, Python)
   function_app.py  requirements.txt  host.json  local.settings.json.sample  azuredeploy.json  README.md
-deploy/                        deploy-proxy.sh  enable-connector.md
+deploy/                        deploy-proxy.sh · deploy-ingestion.sh · deploy-connector.sh · enable-connector.md
+                               operations.md (hardening) · migration-runbook.md (legacy → CCF)
 tests/                         sample v2 payloads + unit tests for the proxy
 ```
 

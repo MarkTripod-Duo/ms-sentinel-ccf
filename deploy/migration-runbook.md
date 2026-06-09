@@ -1,0 +1,71 @@
+# Migration runbook: legacy Cisco Duo connector → CCF
+
+For customers moving off the upstream **`CiscoDuoSecurity`** solution (an Azure Function that ingests via
+the **HTTP Data Collector API**) to this CCF connector, with **zero detection downtime**.
+
+## Why / when
+
+The Azure Monitor **HTTP Data Collector API retires 2026-09-14**. The legacy Duo connector uses it
+(`sentinel_connector.py`: SharedKey signature, `Log-Type` header, `POST /api/logs`) and will stop
+ingesting. This CCF connector uses the Logs Ingestion API + DCRs and is the forward-compatible
+replacement. **Complete the cutover before 2026-09-14.**
+
+The migration is **non-destructive and reversible** at every step before decommissioning.
+
+## How it stays seamless: dual-run via the parser
+
+The `CiscoDuo` parser `union`s the legacy `CiscoDuo_CL` table **and** the new `DuoSecurity*_CL` tables into
+one alias schema. So the existing analytic rules, hunting queries, and workbook keep working against
+**both** data sources at once — you can run the old and new connectors in parallel and cut over with no
+gap and no rule rewrites.
+
+## Steps
+
+**0. Pre-flight (T-minus weeks).**
+- Inventory what depends on `CiscoDuo_CL`: analytic rules, hunting queries, workbooks, custom queries,
+  saved functions. (The upstream solution's own rules already use the `CiscoDuo` parser.)
+- Note your legacy table retention — you'll want to keep `CiscoDuo_CL` queryable through the overlap.
+
+**1. Deploy the signing proxy + CCF connector (new, alongside the old).**
+- `deploy/deploy-proxy.sh` → `deploy/deploy-ingestion.sh` → `deploy/deploy-connector.sh`.
+- The legacy Azure Function connector keeps running untouched.
+
+**2. Deploy this solution's content over the legacy content.**
+- Install the `CiscoDuo` parser from this solution (v2.0.0) — it **supersedes** the legacy parser
+  (same `FunctionAlias: CiscoDuo`) and adds the new-table + dual-run branches. Existing rules/hunts/workbook
+  immediately read both old and new data through it.
+- Optionally install this solution's analytic rules/hunts (new GUIDs) — they coexist with the legacy ones;
+  disable the legacy duplicates whenever you're ready.
+
+**3. Verify the new pipeline (overlap period: a few days).**
+- New tables populate: `DuoSecurityAuthentication_CL | take 10`, plus activity/telephony.
+- The unified parser returns both sources: `CiscoDuo | summarize count() by EventVendor, bin(TimeGenerated, 1h)`
+  should show a continuous stream spanning the legacy and CCF tables.
+- Detections still fire (deploy + confirm as in the test workspace).
+- Confirm no time gap at the handover: events are present in `CiscoDuo_CL` up to the cutover and in
+  `DuoSecurity*_CL` from connector start, with overlap.
+
+**4. Cut over.**
+- Once the CCF connector has a stable overlap, **stop the legacy Azure Function** (disable the timer
+  trigger or stop the Function App). `CiscoDuo_CL` stops growing; `DuoSecurity*_CL` continues. The parser
+  keeps serving historical `CiscoDuo_CL` data, so dashboards/hunts over past data are unaffected.
+- Disable any duplicate legacy analytic rules in favor of this solution's versions.
+
+**5. Decommission (before 2026-09-14).**
+- Delete/uninstall the legacy connector's Function App, storage, and the `CiscoDuoSecurity` Function-based
+  data connector. Remove the legacy Workspace shared-key usage.
+- Keep `CiscoDuo_CL` for its retention period (the parser still unions it); it ages out naturally. No need
+  to delete it — `union isfuzzy=true` tolerates it being gone once it's fully aged out.
+
+## Schema note
+
+The legacy table is flat (`access_device_ip_s`, `action_s`, …); the new tables are nested `dynamic`
+(`access_device`, `action`, …). **You don't remap anything** — the `CiscoDuo` parser normalizes both to the
+same aliases (`SrcIpAddr`, `DvcAction`, `EventResult`, …). Only the v1→v2 admin **action names** differ; see
+[ReleaseNotes](../solution/ReleaseNotes.md) for which admin detections are confirmed, mapped, or pending.
+
+## Rollback
+
+Before step 5, rollback is trivial: re-enable the legacy Function connector. Both feed the parser, so
+detections never lose coverage. After decommissioning, rollback means redeploying the legacy connector
+(possible until the HTTP Data Collector API retires).

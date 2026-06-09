@@ -59,6 +59,22 @@ def test_ensure_https_prepends_scheme_idempotently():
     assert core.ensure_https("http://api-x.duosecurity.com/x") == "http://api-x.duosecurity.com/x"
 
 
+def test_apply_mintime_lookback():
+    # off by default (0 seconds) -> unchanged
+    assert core.apply_mintime_lookback({"mintime": "1717203600000"}, 0) == {"mintime": "1717203600000"}
+    # subtracts lookback*1000 ms from mintime, leaves maxtime alone
+    out = core.apply_mintime_lookback({"mintime": "1717203600000", "maxtime": "1717203720000"}, 180)
+    assert out["mintime"] == str(1717203600000 - 180 * 1000)
+    assert out["maxtime"] == "1717203720000"
+    # no-op when mintime is absent or non-numeric
+    assert core.apply_mintime_lookback({"maxtime": "5"}, 300) == {"maxtime": "5"}
+    assert core.apply_mintime_lookback({"mintime": "abc"}, 300) == {"mintime": "abc"}
+    # does not mutate the caller's dict
+    src = {"mintime": "1717203600000"}
+    core.apply_mintime_lookback(src, 60)
+    assert src == {"mintime": "1717203600000"}
+
+
 def test_auth_next_offset_array_is_joined_to_string():
     payload = _load(TESTS / "sample_auth_v2.json")
     assert isinstance(payload["response"]["metadata"]["next_offset"], list)
