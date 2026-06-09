@@ -1,7 +1,7 @@
 id: e3e9be17-1a73-4a57-9b48-09e5c2d87d10
 name: Cisco Duo - Multiple admin 2FA failures
 description: |
-  'Detects when multiple admin 2FA failures occurs.'
+  'Detects when an administrator repeatedly fails the second-factor (2FA) step signing in to the Duo Admin Panel (more than the threshold within a 10-minute window) - a sign of MFA fatigue/bombing or brute force against an admin account. Sourced from the authentication log (admin-panel application), because the v2 activity log records only successful admin logins, not failures.'
 severity: High
 status: Available
 requiredDataConnectors:
@@ -17,19 +17,23 @@ triggerOperator: gt
 triggerThreshold: 0
 tactics:
   - InitialAccess
+  - CredentialAccess
 relevantTechniques:
   - T1078
+  - T1621
 query: |
   let threshold = 10;
   CiscoDuo
-  | where DvcAction =~ "admin_2fa_error"
-  | summarize count() by DstUserName, bin(TimeGenerated, 10m)
-  | where count_ > threshold
+  | where EventType =~ "authentication"
+  | where SrcAppName contains "Admin Panel"
+  | where EventResult in~ ("denied", "fraud")
+  | summarize FailureCount = count(), SourceIPs = make_set(SrcIpAddr, 10), Reasons = make_set(EventResultDetails, 10) by DstUserName, bin(TimeGenerated, 10m)
+  | where FailureCount > threshold
   | extend AccountCustomEntity = DstUserName
 entityMappings:
   - entityType: Account
     fieldMappings:
       - identifier: Name
         columnName: AccountCustomEntity
-version: 1.0.1
-kind: Scheduled 
+version: 2.0.0
+kind: Scheduled

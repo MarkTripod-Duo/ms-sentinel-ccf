@@ -26,11 +26,14 @@
   - **Mapped** - *AD sync failed*: `DuoActivityActionMap` translates the `*_sync_failure` actions
     (`management_system_sync_failure` confirmed; `admin_/entra_/directory_sync_failure` inferred from the
     `*_sync_finish` vs `*_sync_failure` pattern) to `ad_sync_failed`, so the rule fires.
-  - **Expected (convention; not exercised in-window)** - *New admin* / *Admin user deleted*: v2 is expected to
-    use `admin_create`/`admin_delete` (parallel to the confirmed `user_`/`group_` CRUD names); pass-through
-    covers them. Confirm on a tenant that creates/deletes admins.
-  - **Re-sourced from the authentication log (now firing)** - *Admin 2FA failures* & *Admin failure
-    authentications*: the v2 activity log emits only successful `admin_login`, so these two hunts now query
-    the authentication log filtered to the Duo Admin Panel application (`SrcAppName contains "Admin Panel"`)
-    for non-successful results. Validated against live data (denied admin-panel sign-ins with reasons such as
-    `locked_out`, `user_mistake`, `out_of_date`).
+  - **Expected (convention; not exercised in-window)** - *New admin*, *Admin user deleted*, *Admin password
+    reset*: v2 is expected to use `admin_create`/`admin_delete`/`admin_reset_password` (parallel to the
+    confirmed `user_`/`group_` CRUD names); pass-through covers them. Confirm on a tenant that exercises
+    these admin actions.
+  - **Re-sourced from the authentication log (now firing)** - the *Multiple admin 2FA failures* analytic rule
+    plus the *Admin 2FA failures* and *Admin failure authentications* hunts: the v2 activity log emits only
+    successful `admin_login`, so these now query the authentication log filtered to the Duo Admin Panel
+    application (`SrcAppName contains "Admin Panel"`) for non-successful results. Validated against live data
+    (denied admin-panel sign-ins with reasons such as `locked_out`, `user_mistake`, `out_of_date`).
+  - **Broadened for v2 robustness** - the *Delete actions* hunt now matches any administrative action whose
+    name contains `delete` (instead of a fixed v1 name list), covering both the v1 and v2 delete taxonomies.

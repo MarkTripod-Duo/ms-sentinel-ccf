@@ -1,7 +1,7 @@
 id: 524069d3-0fb0-4e31-b9c3-87bac7a8f132
 name: Cisco Duo - Delete actions
 description: |
-  'Query searches for delete actions performed by admin users.'
+  'Query searches for delete actions performed by admin users - any Duo administrative action whose name contains "delete" (e.g. user_delete, group_delete, integration_delete), which is robust across the v1 administrator-log and v2 activity-log action taxonomies.'
 severity: Medium
 requiredDataConnectors:
   - connectorId: DuoSecurityCCF
@@ -17,8 +17,8 @@ relevantTechniques:
 query: |
   CiscoDuo
   | where TimeGenerated > ago(24h)
-  | where DvcAction in~ ('activation_delete_link', 'admin_activation_delete', 'admin_delete', 'azure_directory_delete', 'bypass_delete', 'delete_child_customer', 'directory_delete', 'feature_delete', 'group_delete', 'hardtoken_delete', 'integration_delete', 'phone_delete', 'policy_delete', 'u2ftoken_delete', 'user_delete')
-  | project TimeGenerated, SrcIpAddr, DstUserName, SrcUserName
+  | where DvcAction contains "delete"
+  | project TimeGenerated, DvcAction, SrcUserName, DstUserName, SrcIpAddr
   | extend AccountCustomEntity = SrcUserName, IPCustomEntity = SrcIpAddr
 entityMappings:
   - entityType: Account
