@@ -1,0 +1,6 @@
+# Azure Functions Python worker (v2 programming model)
+azure-functions
+
+# Pure-Python Duo Admin API HMAC-SHA1 request signer — no third-party runtime deps.
+# https://pypi.org/project/duo-hmac/
+duo-hmac

@@ -1,0 +1,39 @@
+{
+  "response": {
+    "authlogs": [
+      {
+        "access_device": {
+          "browser": "Chrome",
+          "browser_version": "110.0.0.0",
+          "ip": "203.0.113.5",
+          "location": { "city": "Ann Arbor", "country": "US", "state": "Michigan" },
+          "os": "Mac OS X",
+          "os_version": "13.2"
+        },
+        "alias": "",
+        "application": { "key": "DIXXXXXXXXXXXXXXXXXX", "name": "Microsoft Entra ID" },
+        "auth_device": {
+          "ip": "203.0.113.5",
+          "location": { "city": "Ann Arbor", "country": "US", "state": "Michigan" },
+          "name": "+1 555-555-0123"
+        },
+        "email": "narroway@example.com",
+        "event_type": "authentication",
+        "factor": "duo_push",
+        "isotimestamp": "2026-06-08T12:00:05.123456+00:00",
+        "ood_software": "",
+        "reason": "user_approved",
+        "result": "success",
+        "timestamp": 1749384005,
+        "trusted_endpoint_status": "unknown",
+        "txid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "user": { "groups": ["Cloud Users"], "key": "DUXXXXXXXXXXXXXXXXXX", "name": "narroway" }
+      }
+    ],
+    "metadata": {
+      "next_offset": ["1749384005123", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"],
+      "total_objects": 1
+    }
+  },
+  "stat": "OK"
+}

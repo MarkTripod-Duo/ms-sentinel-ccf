@@ -76,7 +76,7 @@
                 {
                     "streams": [ "Custom-DuoSecurityTelephony_CL" ],
                     "destinations": [ "clv2ws1" ],
-                    "transformKql": "source | extend TimeGenerated = coalesce(todatetime(ts), todatetime(isotimestamp)) | project-rename telephony_type = ['type']",
+                    "transformKql": "source | extend TimeGenerated = iif(isnotempty(ts), todatetime(ts), todatetime(isotimestamp)), telephony_type = ['type']",
                     "outputStream": "Custom-DuoSecurityTelephony_CL"
                 }
             ],

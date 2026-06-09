@@ -1,0 +1,20 @@
+{
+  "response": {
+    "items": [
+      {
+        "context": "authentication",
+        "credits": 1,
+        "phone": "+15555550123",
+        "telephony_id": "22222222-3333-4444-5555-666666666666",
+        "timestamp": 1749384200,
+        "ts": "2026-06-08T12:03:20+00:00",
+        "type": "phone"
+      }
+    ],
+    "metadata": {
+      "next_offset": "1749384200000,22222222-3333-4444-5555-666666666666",
+      "total_objects": 1
+    }
+  },
+  "stat": "OK"
+}

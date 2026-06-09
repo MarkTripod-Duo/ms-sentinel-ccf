@@ -1,0 +1,21 @@
+{
+  "response": {
+    "items": [
+      {
+        "action": "user_update",
+        "activity_id": "11111111-2222-3333-4444-555555555555",
+        "actor": { "details": "{}", "key": "DAXXXXXXXXXXXXXXXXXX", "name": "admin@example.com", "type": "admin" },
+        "akey": "AKXXXXXXXXXXXXXXXXXX",
+        "client_ip": "203.0.113.9",
+        "target": { "key": "DUXXXXXXXXXXXXXXXXXX", "name": "narroway", "type": "user" },
+        "timestamp": 1749384100,
+        "ts": "2026-06-08T12:01:40+00:00"
+      }
+    ],
+    "metadata": {
+      "next_offset": "1749384100000,11111111-2222-3333-4444-555555555555",
+      "total_objects": 1
+    }
+  },
+  "stat": "OK"
+}

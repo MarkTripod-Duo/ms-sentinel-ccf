@@ -1,0 +1,177 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "comments": "Stage 2 ingestion resources for the Duo CCF connector: the three custom DuoSecurity*_CL tables and the Data Collection Rule (3 streams + transforms) that lands data in them. The DCE is created by deploy-ingestion.sh and passed in as dataCollectionEndpointId. Mirrors solution/Data Connectors/DuoSecurityCCF_ccp/DuoSecurity_Tables.json and DuoSecurity_DCR.json."
+  },
+  "parameters": {
+    "workspaceName": { "type": "string", "metadata": { "description": "Log Analytics workspace name (Sentinel-enabled)." } },
+    "workspaceResourceId": { "type": "string", "metadata": { "description": "Full resource id of the workspace." } },
+    "dataCollectionEndpointId": { "type": "string", "metadata": { "description": "Resource id of the Data Collection Endpoint." } },
+    "dcrName": { "type": "string", "defaultValue": "duo-ccf-dcr", "metadata": { "description": "Name for the Data Collection Rule." } },
+    "location": { "type": "string", "defaultValue": "[resourceGroup().location]" }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[format('{0}/DuoSecurityAuthentication_CL', parameters('workspaceName'))]",
+      "properties": {
+        "schema": {
+          "name": "DuoSecurityAuthentication_CL",
+          "columns": [
+            { "name": "TimeGenerated", "type": "datetime" },
+            { "name": "access_device", "type": "dynamic" },
+            { "name": "adaptive_trust_assessments", "type": "dynamic" },
+            { "name": "alias", "type": "string" },
+            { "name": "application", "type": "dynamic" },
+            { "name": "auth_device", "type": "dynamic" },
+            { "name": "email", "type": "string" },
+            { "name": "event_type", "type": "string" },
+            { "name": "factor", "type": "string" },
+            { "name": "isotimestamp", "type": "string" },
+            { "name": "ood_software", "type": "string" },
+            { "name": "reason", "type": "string" },
+            { "name": "result", "type": "string" },
+            { "name": "timestamp", "type": "long" },
+            { "name": "trusted_endpoint_status", "type": "string" },
+            { "name": "txid", "type": "string" },
+            { "name": "user", "type": "dynamic" }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[format('{0}/DuoSecurityActivity_CL', parameters('workspaceName'))]",
+      "properties": {
+        "schema": {
+          "name": "DuoSecurityActivity_CL",
+          "columns": [
+            { "name": "TimeGenerated", "type": "datetime" },
+            { "name": "action", "type": "dynamic" },
+            { "name": "activity_id", "type": "string" },
+            { "name": "actor", "type": "dynamic" },
+            { "name": "akey", "type": "string" },
+            { "name": "client_ip", "type": "string" },
+            { "name": "target", "type": "dynamic" },
+            { "name": "timestamp", "type": "long" },
+            { "name": "ts", "type": "string" }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces/tables",
+      "apiVersion": "2022-10-01",
+      "name": "[format('{0}/DuoSecurityTelephony_CL', parameters('workspaceName'))]",
+      "properties": {
+        "schema": {
+          "name": "DuoSecurityTelephony_CL",
+          "columns": [
+            { "name": "TimeGenerated", "type": "datetime" },
+            { "name": "context", "type": "string" },
+            { "name": "credits", "type": "int" },
+            { "name": "isotimestamp", "type": "string" },
+            { "name": "phone", "type": "string" },
+            { "name": "telephony_id", "type": "string" },
+            { "name": "telephony_type", "type": "string" },
+            { "name": "timestamp", "type": "long" },
+            { "name": "ts", "type": "string" }
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Insights/dataCollectionRules",
+      "apiVersion": "2022-06-01",
+      "name": "[parameters('dcrName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), 'DuoSecurityAuthentication_CL')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), 'DuoSecurityActivity_CL')]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspaceName'), 'DuoSecurityTelephony_CL')]"
+      ],
+      "properties": {
+        "dataCollectionEndpointId": "[parameters('dataCollectionEndpointId')]",
+        "streamDeclarations": {
+          "Custom-DuoSecurityAuthentication_CL": {
+            "columns": [
+              { "name": "access_device", "type": "dynamic" },
+              { "name": "adaptive_trust_assessments", "type": "dynamic" },
+              { "name": "alias", "type": "string" },
+              { "name": "application", "type": "dynamic" },
+              { "name": "auth_device", "type": "dynamic" },
+              { "name": "email", "type": "string" },
+              { "name": "event_type", "type": "string" },
+              { "name": "factor", "type": "string" },
+              { "name": "isotimestamp", "type": "string" },
+              { "name": "ood_software", "type": "string" },
+              { "name": "reason", "type": "string" },
+              { "name": "result", "type": "string" },
+              { "name": "timestamp", "type": "long" },
+              { "name": "trusted_endpoint_status", "type": "string" },
+              { "name": "txid", "type": "string" },
+              { "name": "user", "type": "dynamic" }
+            ]
+          },
+          "Custom-DuoSecurityActivity_CL": {
+            "columns": [
+              { "name": "action", "type": "dynamic" },
+              { "name": "activity_id", "type": "string" },
+              { "name": "actor", "type": "dynamic" },
+              { "name": "akey", "type": "string" },
+              { "name": "client_ip", "type": "string" },
+              { "name": "target", "type": "dynamic" },
+              { "name": "timestamp", "type": "long" },
+              { "name": "ts", "type": "string" }
+            ]
+          },
+          "Custom-DuoSecurityTelephony_CL": {
+            "columns": [
+              { "name": "context", "type": "string" },
+              { "name": "credits", "type": "int" },
+              { "name": "isotimestamp", "type": "string" },
+              { "name": "phone", "type": "string" },
+              { "name": "telephony_id", "type": "string" },
+              { "name": "timestamp", "type": "long" },
+              { "name": "ts", "type": "string" },
+              { "name": "type", "type": "string" }
+            ]
+          }
+        },
+        "destinations": {
+          "logAnalytics": [
+            { "workspaceResourceId": "[parameters('workspaceResourceId')]", "name": "clv2ws1" }
+          ]
+        },
+        "dataFlows": [
+          {
+            "streams": [ "Custom-DuoSecurityAuthentication_CL" ],
+            "destinations": [ "clv2ws1" ],
+            "transformKql": "source | extend TimeGenerated = todatetime(isotimestamp)",
+            "outputStream": "Custom-DuoSecurityAuthentication_CL"
+          },
+          {
+            "streams": [ "Custom-DuoSecurityActivity_CL" ],
+            "destinations": [ "clv2ws1" ],
+            "transformKql": "source | extend TimeGenerated = todatetime(ts)",
+            "outputStream": "Custom-DuoSecurityActivity_CL"
+          },
+          {
+            "streams": [ "Custom-DuoSecurityTelephony_CL" ],
+            "destinations": [ "clv2ws1" ],
+            "transformKql": "source | extend TimeGenerated = iif(isnotempty(ts), todatetime(ts), todatetime(isotimestamp)), telephony_type = ['type']",
+            "outputStream": "Custom-DuoSecurityTelephony_CL"
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "dcrName": { "type": "string", "value": "[parameters('dcrName')]" },
+    "dcrImmutableId": { "type": "string", "value": "[reference(resourceId('Microsoft.Insights/dataCollectionRules', parameters('dcrName'))).immutableId]" },
+    "dceLogsIngestionEndpoint": { "type": "string", "value": "[reference(parameters('dataCollectionEndpointId'), '2022-06-01').logsIngestion.endpoint]" }
+  }
+}

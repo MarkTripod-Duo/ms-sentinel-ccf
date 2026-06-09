@@ -30,15 +30,15 @@
             "sampleQueries": [
                 {
                     "description": "Recent Duo authentication failures",
-                    "query": "DuoSecurityAuthentication_CL\n | where result != \"success\"\n | take 10"
+                    "query": "DuoSecurityAuthentication_CL\n | where Result != \"success\"\n | take 10"
                 },
                 {
                     "description": "Duo admin activity by actor",
-                    "query": "DuoSecurityActivity_CL\n | summarize count() by tostring(actor.name), tostring(action)"
+                    "query": "DuoSecurityActivity_CL\n | summarize count() by tostring(Actor.name), tostring(Action)"
                 },
                 {
                     "description": "Duo telephony credit usage",
-                    "query": "DuoSecurityTelephony_CL\n | summarize Credits = sum(credits) by telephony_type, context"
+                    "query": "DuoSecurityTelephony_CL\n | summarize Credits = sum(Credits) by Telephony_type, Context"
                 }
             ],
             "dataTypes": [
