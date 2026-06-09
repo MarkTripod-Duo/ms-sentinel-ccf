@@ -88,21 +88,44 @@ deploy/deploy-connector.sh \
 
 Good for a working test environment. For a publishable/shareable artifact, use Path A instead.
 
-## Stage 3, Path A — Package as a Content Hub solution (recommended for distribution)
+## Stage 3, Path A — Build a solution package (recommended for distribution)
 
-Lets an operator enter the proxy URL + function key in the Sentinel connector pane; the platform
-creates the DCE/DCR/tables/pollers on **Connect**.
+Both packaging paths are prepared in-repo.
 
-1. Edit [`solution/Data/Solution_DuoSecurityCCF.json`](../solution/Data/Solution_DuoSecurityCCF.json):
-   set `BasePath` to the absolute path of your `solution/` folder and fill `Author`.
-2. Run the [Create-Azure-Sentinel-Solution V3 tool](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/CCP_README.md)
-   pointing at that data input file. It emits `Package/mainTemplate.json` + `createUiDefinition.json`.
-3. Deploy the generated `mainTemplate.json` to your Sentinel resource group.
-4. In **Microsoft Sentinel → Data connectors**, open **Cisco Duo Security v2 Logs (CCF)**, enter the
-   **Signing proxy base URL** and **Function key**, and click **Connect**.
+**A1 — Self-contained deployable package** (no Azure-Sentinel clone, no PowerShell):
+
+```bash
+deploy/build-package.sh    # → solution/Package/{mainTemplate.json, createUiDefinition.json, .zip}
+```
+
+Assembles the whole Sentinel-side solution (DCE + tables + DCR + connector definition + 3 pollers +
+parsers + 11 rules + 10 hunts + workbook) into one ARM template (validated with
+`az deployment group validate`). Requires `python3 -m pip install pyyaml`. Then deploy:
+
+```bash
+az deployment group create -g <rg> --template-file solution/Package/mainTemplate.json \
+  --parameters workspace=<ws> proxyBaseUrl=https://<proxy>.azurewebsites.net/api functionKey=<key>
+```
+
+One-click deployable and portal "custom template"-loadable — but **not** the official Content Hub
+gallery format.
+
+**A2 — Official Content Hub package** (marketplace / Partner Center):
+
+```bash
+deploy/stage-for-packaging.sh --sentinel-repo ~/code/Azure-Sentinel
+# then run the V3 tool in the clone (the script prints the exact command + data-folder path)
+```
+
+Stages `solution/` into the clone and runs the [V3 tool](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/CCP_README.md),
+which emits the official `Package/` with the Content Hub `contentPackages`/metadata. Set real
+`publisherId`/`Author`/`offerId` first.
+
+Either way, in **Microsoft Sentinel → Data connectors**, open **Cisco Duo Security v2 Logs (CCF)**,
+enter the **proxy base URL** + **function key**, and click **Connect**.
 
 > The single definition references three pollers (one file, array of three) and one DCR with three
-> streams — this is the documented CCP "single definition / multiple pollers" layout.
+> streams — the documented CCP "single definition / multiple pollers" layout.
 
 ## Stage 3, Path B — Wire the ARM resources by hand
 

@@ -5,6 +5,11 @@ A Microsoft Sentinel data connector that ingests **Cisco Duo Admin API v2 log st
 (CCF / `RestApiPoller`)**, plus a tiny stateless **signing proxy** that bridges the one thing CCF
 cannot do natively: Duo's per-request HMAC‑SHA1 request signing.
 
+Beyond ingestion it is a **complete solution**: a backward‑compatible `CiscoDuo` parser (dual‑run with
+the legacy table), 11 analytic rules + 10 hunting queries, a workbook, ASIM Authentication normalization,
+and an administrator [migration runbook](deploy/migration-runbook.md) for replacing the legacy
+HTTP‑Data‑Collector connector before that API retires (**2026‑09‑14**).
+
 ## Why a signing proxy is required
 
 Duo's Admin API authenticates **every request** with an HMAC‑SHA1 signature:
@@ -75,6 +80,7 @@ signing-proxy/                 The thin HMAC signer (Azure Function, Python)
   function_app.py  requirements.txt  host.json  local.settings.json.sample  azuredeploy.json  README.md
 deploy/                        deploy-proxy.sh · deploy-ingestion.sh · deploy-connector.sh · enable-connector.md
                                operations.md (hardening) · migration-runbook.md (legacy → CCF)
+                               build-package.sh (in-repo deployable mainTemplate) · stage-for-packaging.sh (→ V3)
 tests/                         sample v2 payloads + unit tests for the proxy
 ```
 
@@ -98,16 +104,26 @@ is derived from each event's `isotimestamp` / `ts` by the DCR transform. (The Az
 renderer title-cases column *headers* for display only — the stored names are lowercase, as
 `getschema` confirms.)
 
-## Deploy (summary — see [`deploy/enable-connector.md`](deploy/enable-connector.md))
+## Deploy
 
-1. **Signing proxy** — deploy `signing-proxy/azuredeploy.json`, push the function code, put the Duo
-   `skey` in Key Vault, set `DUO_IKEY` / `DUO_API_HOST`. Capture the **Function URL** + **Function key**.
-2. **Ingestion** — create a Data Collection Endpoint, the three tables, and the DCR from `solution/`.
-   Capture the **DCE URL** + **DCR immutable id**.
-3. **Connector** — deploy the connector definition + three pollers wired with the Function URL/key and
-   DCE/DCR ids, *or* package `solution/` with the
-   [Create-Azure-Sentinel-Solution V3 tool](https://github.com/Azure/Azure-Sentinel/blob/master/Tools/Create-Azure-Sentinel-Solution/V3/CCP_README.md)
-   into a Content Hub solution and enter the Function URL/key in the connector pane.
+Three scripted stages (full walkthrough + packaging in [`deploy/enable-connector.md`](deploy/enable-connector.md)):
+
+1. **Signing proxy** — `deploy/deploy-proxy.sh` (Function App + Key Vault; prints the proxy URL + function key).
+2. **Ingestion** — `deploy/deploy-ingestion.sh` (DCE + 3 tables + DCR; prints the DCE URL + DCR immutable id).
+3. **Connector + content** — `deploy/deploy-connector.sh` (definition + 3 pollers), **or** build a solution
+   package: `deploy/build-package.sh` → a self-contained deployable `mainTemplate.json` (in-repo, no clone),
+   or `deploy/stage-for-packaging.sh` → the official Content Hub package via the V3 tool.
+
+## Documentation
+
+| Guide | For |
+| --- | --- |
+| [deploy/enable-connector.md](deploy/enable-connector.md) | Full deploy walkthrough (proxy → ingestion → connector), packaging, and end-to-end verification |
+| [deploy/migration-runbook.md](deploy/migration-runbook.md) | **Administrators:** migrating off the legacy HTTP-Data-Collector connector — dual-run → cutover before 2026-09-14 |
+| [deploy/operations.md](deploy/operations.md) | Production hardening: zero-gap data completeness, `skey` rotation, multi-account, networking |
+| [signing-proxy/README.md](signing-proxy/README.md) | The signing proxy — configuration, auth model, deploy, local run |
+| [solution/Parsers/ASim/README.md](solution/Parsers/ASim/README.md) | ASIM Authentication parsers — conformance + unified-view inclusion |
+| [solution/ReleaseNotes.md](solution/ReleaseNotes.md) | Version history + per-detection status (which rules fire / are mapped / are pending) |
 
 ## Test
 
