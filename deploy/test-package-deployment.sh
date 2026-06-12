@@ -1,44 +1,42 @@
 #!/usr/bin/env bash
 #
-# End-to-end test of the self-contained solution-package deployment, with per-stage PASS/FAIL:
+# End-to-end test of the native-auth Duo CCF deployment, with per-stage PASS/FAIL:
 #   0. resource group + workspace + Sentinel onboarding
-#   1. signing proxy (deploy-proxy.sh) + smoke test
-#   2. build the package (build-package.sh)
-#   3. ARM-validate + deploy solution/Package/mainTemplate.json
-#   4. verify (deployment state, rule/poller counts, parser resolves, data snapshot)
+#   1. ingestion resources (DCE + 3 tables + DCR)            -> deploy-ingestion.sh
+#   2. the three connectors with the built-in CiscoDuo auth  -> deploy-connector.sh (active pollers, no proxy)
+#   3. build + ARM-validate the self-contained package        -> build-package.sh + az deployment group validate
+#   4. verify (tables populate, pagination, NO Function App / Key Vault in the resource group)
 #
-# Prereqs: az CLI (logged in), Azure Functions Core Tools (func), python3 + pyyaml, curl.
+# There is no signing proxy: the pollers call the Duo Admin API directly using Microsoft's built-in
+# CiscoDuo auth type. The Duo credentials are passed to the scripted connector deploy so the pollers are
+# active immediately (the Content Hub package instead resolves them at Connect time).
+#
+# Prereqs: az CLI (logged in), python3 + pyyaml, curl.
 #
 # Usage:
-#   ./test-package-deployment.sh --duo-host api-XXXX.duosecurity.com --duo-ikey DI... --duo-skey '<skey>' \
+#   ./test-package-deployment.sh --duo-host https://api-XXXX.duosecurity.com --ikey DI... --skey '<skey>' \
 #       [--resource-group rg-sentinel-duo-test] [--workspace law-sentinel-duo-test] [--location eastus] \
-#       [--proxy-location centralus] [--proxy-app duo-ccf-proxy-test] \
-#       [--skip-env] [--skip-proxy] [--wait-for-data <minutes>] [--dry-run]
+#       [--skip-env] [--wait-for-data <minutes>] [--dry-run]
 #
 set -uo pipefail
 
 RG="rg-sentinel-duo-test"; WS="law-sentinel-duo-test"; LOC="eastus"
-PROXY_APP="duo-ccf-proxy-test"; PROXY_LOC=""
-DUO_HOST=""; DUO_IKEY=""; DUO_SKEY=""
-SKIP_ENV=false; SKIP_PROXY=false; WAIT_DATA=0; DRY_RUN=false
+DUO_HOST=""; IKEY=""; SKEY=""
+SKIP_ENV=false; WAIT_DATA=0; DRY_RUN=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --duo-host) DUO_HOST="$2"; shift 2 ;;
-    --duo-ikey) DUO_IKEY="$2"; shift 2 ;;
-    --duo-skey) DUO_SKEY="$2"; shift 2 ;;
+    --ikey) IKEY="$2"; shift 2 ;;
+    --skey) SKEY="$2"; shift 2 ;;
     --resource-group) RG="$2"; shift 2 ;;
     --workspace) WS="$2"; shift 2 ;;
     --location) LOC="$2"; shift 2 ;;
-    --proxy-location) PROXY_LOC="$2"; shift 2 ;;
-    --proxy-app) PROXY_APP="$2"; shift 2 ;;
     --skip-env) SKIP_ENV=true; shift ;;
-    --skip-proxy) SKIP_PROXY=true; shift ;;
     --wait-for-data) WAIT_DATA="$2"; shift 2 ;;
     --dry-run) DRY_RUN=true; shift ;;
     *) echo "Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
-PROXY_LOC="${PROXY_LOC:-$LOC}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -51,25 +49,21 @@ info() { echo "  ..    $*"; }
 
 if $DRY_RUN; then
   cat <<EOF
-DRY-RUN plan (resource group '$RG', workspace '$WS' in $LOC; proxy '$PROXY_APP' in $PROXY_LOC):
+DRY-RUN plan (resource group '$RG', workspace '$WS' in $LOC):
   Stage 0  az group create / workspace create / Sentinel onboardingStates PUT      $($SKIP_ENV && echo '(skipped)')
-  Stage 1  deploy/deploy-proxy.sh --app-name $PROXY_APP --location $PROXY_LOC ...   $($SKIP_PROXY && echo '(skipped)')
-           + curl proxy /duo/authentication smoke test (expect stat:OK)
-  Stage 2  deploy/build-package.sh  ->  solution/Package/mainTemplate.json
-  Stage 3  az deployment group validate + create -n duo-ccf-solution (mainTemplate.json)
-  Stage 4  verify deployment Succeeded; >=11 alertRules, >=3 pollers; CiscoDuo parser resolves; data snapshot
+  Stage 1  deploy/deploy-ingestion.sh        -> DCE + 3 tables + DCR
+  Stage 2  deploy/deploy-connector.sh         -> 3 connectors, built-in CiscoDuo auth (active pollers, no proxy)
+  Stage 3  deploy/build-package.sh + az deployment group validate (workspace + workspace-location only)
+  Stage 4  verify tables populate; pagination; NO Function App / Key Vault present
 Run without --dry-run to execute. Nothing was done.
 EOF
   exit 0
 fi
 
-if ! $SKIP_PROXY; then
-  : "${DUO_HOST:?--duo-host is required (or use --skip-proxy)}"
-  : "${DUO_IKEY:?--duo-ikey is required}"
-  : "${DUO_SKEY:?--duo-skey is required}"
-fi
+: "${DUO_HOST:?--duo-host is required}"
+: "${IKEY:?--ikey is required}"
+: "${SKEY:?--skey is required}"
 SUB="$(az account show --query id -o tsv 2>/dev/null)" || { echo "Not logged in to az." >&2; exit 1; }
-BASE="https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.OperationalInsights/workspaces/$WS/providers/Microsoft.SecurityInsights"
 
 # --- Stage 0: environment ---
 hr "Stage 0 — environment"
@@ -81,75 +75,66 @@ if $SKIP_ENV; then info "skipped (--skip-env)"; else
     --body '{"properties":{}}' && pass "Sentinel onboarded" || fail "Sentinel onboarding"
 fi
 
-# --- Stage 1: signing proxy ---
-hr "Stage 1 — signing proxy"
-if $SKIP_PROXY; then
-  info "skipped (--skip-proxy); using existing $PROXY_APP"
+# --- Stage 1: ingestion ---
+hr "Stage 1 — ingestion (DCE + tables + DCR)"
+if "$SCRIPT_DIR/deploy-ingestion.sh" --resource-group "$RG" --workspace "$WS" --location "$LOC" >/tmp/duo-ingestion.log 2>&1; then
+  pass "ingestion deployed"
 else
-  if "$SCRIPT_DIR/deploy-proxy.sh" --resource-group "$RG" --app-name "$PROXY_APP" \
-       --duo-host "$DUO_HOST" --duo-ikey "$DUO_IKEY" --duo-skey "$DUO_SKEY" --location "$PROXY_LOC"; then
-    pass "proxy deployed"
-  else
-    fail "proxy deploy"; echo "  -> aborting (proxy is required for the package)."; exit 1
-  fi
+  fail "deploy-ingestion.sh"; tail -8 /tmp/duo-ingestion.log; echo "  -> aborting."; exit 1
 fi
-PROXY_HOST="$(az functionapp show -g "$RG" -n "$PROXY_APP" --query defaultHostName -o tsv 2>/dev/null)"
-PROXY_URL="https://${PROXY_HOST}/api"
-PROXY_KEY="$(az functionapp keys list -g "$RG" -n "$PROXY_APP" --query functionKeys.default -o tsv 2>/dev/null)"
-[ -n "$PROXY_HOST" ] && [ -n "$PROXY_KEY" ] && pass "captured proxy URL + key" || { fail "proxy URL/key not found"; exit 1; }
-NOW=$(date +%s); MIN=$(( (NOW-86400)*1000 )); MAX=$(( (NOW-120)*1000 ))
-STAT="$(curl -s "$PROXY_URL/duo/authentication?mintime=$MIN&maxtime=$MAX&limit=1" -H "x-functions-key: $PROXY_KEY" \
-        | python3 -c "import sys,json;print(json.load(sys.stdin).get('stat','?'))" 2>/dev/null || echo "no-response")"
-[ "$STAT" = "OK" ] && pass "proxy smoke test (Duo stat:OK)" || fail "proxy smoke test (got: $STAT)"
+DCE_URL="$(az deployment group show -g "$RG" -n duo-ccf-ingestion --query properties.outputs.dceLogsIngestionEndpoint.value -o tsv 2>/dev/null)"
+DCR_ID="$(az deployment group show -g "$RG" -n duo-ccf-ingestion --query properties.outputs.dcrImmutableId.value -o tsv 2>/dev/null)"
+[ -n "$DCE_URL" ] && [ -n "$DCR_ID" ] && pass "captured DCE URL + DCR immutable id" || { fail "DCE/DCR outputs missing"; exit 1; }
 
-# --- Stage 2: build package ---
-hr "Stage 2 — build package"
+# --- Stage 2: connectors (native CiscoDuo auth) ---
+hr "Stage 2 — connectors (built-in CiscoDuo auth, no proxy)"
+if "$SCRIPT_DIR/deploy-connector.sh" --resource-group "$RG" --workspace "$WS" \
+     --duo-host "$DUO_HOST" --ikey "$IKEY" --skey "$SKEY" --dce "$DCE_URL" --dcr-immutable-id "$DCR_ID" >/tmp/duo-connector.log 2>&1; then
+  pass "3 connectors deployed (active pollers)"
+else
+  fail "deploy-connector.sh"; tail -12 /tmp/duo-connector.log; echo "  -> aborting."; exit 1
+fi
+BASE="https://management.azure.com/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.OperationalInsights/workspaces/$WS/providers/Microsoft.SecurityInsights"
+POLLERS="$(az rest --method get --url "$BASE/dataConnectors?api-version=2023-02-01-preview" --query "length(value[?kind=='RestApiPoller'])" -o tsv 2>/dev/null || echo 0)"
+[ "${POLLERS:-0}" -ge 3 ] 2>/dev/null && pass "$POLLERS RestApiPoller connections, CiscoDuo auth" || fail "pollers: ${POLLERS:-0} (expected >=3)"
+
+# --- Stage 3: build + validate the package ---
+hr "Stage 3 — build + ARM-validate the package"
 if "$SCRIPT_DIR/build-package.sh" >/tmp/duo-buildpkg.log 2>&1; then
   pass "package built"
 else
-  fail "build-package.sh"; tail -5 /tmp/duo-buildpkg.log; echo "  -> aborting."; exit 1
+  fail "build-package.sh"; tail -5 /tmp/duo-buildpkg.log; exit 1
 fi
-[ -f "$MT" ] && pass "mainTemplate.json present" || { fail "mainTemplate.json missing"; exit 1; }
-
-# --- Stage 3: validate + deploy ---
-hr "Stage 3 — validate + deploy package"
-PARAMS=(workspace="$WS" workspace-location="$LOC" proxyBaseUrl="$PROXY_URL" functionKey="$PROXY_KEY")
-if az deployment group validate -g "$RG" --template-file "$MT" --parameters "${PARAMS[@]}" \
+grep -q '"proxyBaseUrl"\|"functionKey"' "$MT" && fail "package still references proxy params" || pass "package has no proxy parameters"
+if az deployment group validate -g "$RG" --template-file "$MT" \
+     --parameters workspace="$WS" workspace-location="$LOC" \
      --query properties.provisioningState -o tsv 2>/tmp/duo-val.log | grep -q Succeeded; then
   pass "ARM validate"
 else
-  fail "ARM validate"; tail -5 /tmp/duo-val.log; echo "  -> aborting."; exit 1
-fi
-if az deployment group create -g "$RG" -n duo-ccf-solution --template-file "$MT" --parameters "${PARAMS[@]}" -o none; then
-  pass "package deployed"
-else
-  fail "package deploy"; exit 1
+  fail "ARM validate"; tail -8 /tmp/duo-val.log
 fi
 
 # --- Stage 4: verify ---
 hr "Stage 4 — verify"
-STATE="$(az deployment group show -g "$RG" -n duo-ccf-solution --query properties.provisioningState -o tsv 2>/dev/null)"
-[ "$STATE" = "Succeeded" ] && pass "deployment state Succeeded" || fail "deployment state: $STATE"
-RULES="$(az rest --method get --url "$BASE/alertRules?api-version=2023-02-01" --query "length(value[?kind=='Scheduled'])" -o tsv 2>/dev/null || echo 0)"
-[ "${RULES:-0}" -ge 11 ] 2>/dev/null && pass "$RULES analytic rules" || fail "analytic rules: ${RULES:-0} (expected >=11)"
-POLLERS="$(az rest --method get --url "$BASE/dataConnectors?api-version=2022-10-01-preview" --query "length(value[?kind=='RestApiPoller'])" -o tsv 2>/dev/null || echo 0)"
-[ "${POLLERS:-0}" -ge 3 ] 2>/dev/null && pass "$POLLERS RestApiPoller connections" || fail "pollers: ${POLLERS:-0} (expected >=3)"
+# proxy-free: no Function App / Key Vault anywhere in the resource group
+LEFTOVER="$(az resource list -g "$RG" --query "length([?type=='Microsoft.Web/sites' || type=='Microsoft.KeyVault/vaults'])" -o tsv 2>/dev/null || echo '?')"
+[ "$LEFTOVER" = "0" ] && pass "no Function App / Key Vault in resource group (proxy-free)" || fail "found $LEFTOVER Function App/Key Vault resources (expected 0)"
 WS_GUID="$(az monitor log-analytics workspace show -g "$RG" -n "$WS" --query customerId -o tsv 2>/dev/null)"
-az monitor log-analytics query --workspace "$WS_GUID" --analytics-query "CiscoDuo | limit 0" -o none 2>/dev/null \
-  && pass "CiscoDuo parser resolves" || fail "CiscoDuo parser does not resolve"
 get_count() { az monitor log-analytics query --workspace "$WS_GUID" --analytics-query "DuoSecurityAuthentication_CL | count" --query "[0].Count" -o tsv 2>/dev/null || echo 0; }
 if [ "${WAIT_DATA:-0}" -gt 0 ]; then
   info "waiting up to ${WAIT_DATA}m for first events (pollers run on a schedule)..."
   C=0; for _ in $(seq 1 "$WAIT_DATA"); do C="$(get_count)"; [ "${C:-0}" -gt 0 ] 2>/dev/null && break; sleep 60; done
-  [ "${C:-0}" -gt 0 ] 2>/dev/null && pass "data flowing ($C auth events)" || fail "no data after ${WAIT_DATA}m"
+  [ "${C:-0}" -gt 0 ] 2>/dev/null && pass "authentication data flowing ($C events) — native CiscoDuo auth works" || fail "no data after ${WAIT_DATA}m"
+  info "to confirm the next_offset cursor, generate >1000 events in a window and re-check all three tables"
 else
-  info "auth events so far: $(get_count) (populate ~5-10 min after deploy; re-check, or use --wait-for-data 15)"
+  info "auth events so far: $(get_count) (populate ~5-10 min after Connect; re-check or use --wait-for-data 15)"
+  info "next_offset pagination: generate >1000 events in one window and confirm all ingest"
 fi
 
 # --- Summary ---
 hr "Summary"
 if [ "$FAILS" -eq 0 ]; then
-  echo "  ALL STAGES PASSED. Connector + content deployed via the package and active."
+  echo "  ALL STAGES PASSED. Native CiscoDuo auth deployed and active — no signing proxy."
 else
   echo "  $FAILS check(s) FAILED — see above."
 fi

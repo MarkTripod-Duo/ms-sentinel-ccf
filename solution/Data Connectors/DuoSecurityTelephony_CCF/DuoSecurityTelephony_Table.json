@@ -1,0 +1,24 @@
+[
+    {
+        "name": "DuoSecurityTelephony_CL",
+        "apiVersion": "2022-10-01",
+        "type": "Microsoft.OperationalInsights/workspaces/tables",
+        "location": "{{location}}",
+        "properties": {
+            "schema": {
+                "name": "DuoSecurityTelephony_CL",
+                "columns": [
+                    { "name": "TimeGenerated", "type": "datetime" },
+                    { "name": "context", "type": "string" },
+                    { "name": "credits", "type": "int" },
+                    { "name": "isotimestamp", "type": "string" },
+                    { "name": "phone", "type": "string" },
+                    { "name": "telephony_id", "type": "string" },
+                    { "name": "telephony_type", "type": "string" },
+                    { "name": "timestamp", "type": "long" },
+                    { "name": "ts", "type": "string" }
+                ]
+            }
+        }
+    }
+]

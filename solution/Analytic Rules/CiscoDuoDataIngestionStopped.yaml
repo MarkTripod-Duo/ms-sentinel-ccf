@@ -1,7 +1,7 @@
 id: 6a36e0d2-d85a-438f-b398-7e847dfc8d6d
 name: Cisco Duo - Data ingestion stopped
 description: |
-  'Identifies when the Cisco Duo CCF connector has stopped ingesting data. Fires when no Duo events (authentication, activity, or telephony) have arrived for longer than the configured threshold while the connector was recently active - typically indicating a broken signing proxy, rotated/expired Duo API credentials, or a disabled poller.'
+  'Identifies when the Cisco Duo CCF connector has stopped ingesting data. Fires when no Duo events (authentication, activity, or telephony) have arrived for longer than the configured threshold while the connector was recently active - typically indicating rotated/expired Duo API credentials, a disconnected connector, or a Duo Admin API outage.'
 severity: Medium
 status: Available
 requiredDataConnectors:

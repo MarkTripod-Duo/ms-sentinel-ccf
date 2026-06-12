@@ -1,0 +1,42 @@
+{
+    "name": "DuoSecurityTelephonyDCR",
+    "apiVersion": "2024-03-11",
+    "type": "Microsoft.Insights/dataCollectionRules",
+    "kind": "Direct",
+    "location": "{{location}}",
+    "tags": {
+        "createdBy": "SentinelCodelessConnector"
+    },
+    "properties": {
+        "streamDeclarations": {
+            "Custom-DuoSecurityTelephony_CL": {
+                "columns": [
+                    { "name": "context", "type": "string" },
+                    { "name": "credits", "type": "int" },
+                    { "name": "isotimestamp", "type": "string" },
+                    { "name": "phone", "type": "string" },
+                    { "name": "telephony_id", "type": "string" },
+                    { "name": "timestamp", "type": "long" },
+                    { "name": "ts", "type": "string" },
+                    { "name": "type", "type": "string" }
+                ]
+            }
+        },
+        "destinations": {
+            "logAnalytics": [
+                {
+                    "workspaceResourceId": "{{workspaceResourceId}}",
+                    "name": "clv2ws1"
+                }
+            ]
+        },
+        "dataFlows": [
+            {
+                "streams": [ "Custom-DuoSecurityTelephony_CL" ],
+                "destinations": [ "clv2ws1" ],
+                "outputStream": "Custom-DuoSecurityTelephony_CL",
+                "transformKql": "source | extend TimeGenerated = iif(isnotempty(ts), todatetime(ts), todatetime(isotimestamp)), telephony_type = ['type']"
+            }
+        ]
+    }
+}

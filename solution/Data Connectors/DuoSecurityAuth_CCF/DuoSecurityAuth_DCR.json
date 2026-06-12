@@ -1,0 +1,53 @@
+{
+    "name": "DuoSecurityAuthDCR",
+    "apiVersion": "2024-03-11",
+    "type": "Microsoft.Insights/dataCollectionRules",
+    "kind": "Direct",
+    "location": "{{location}}",
+    "tags": {
+        "createdBy": "SentinelCodelessConnector"
+    },
+    "properties": {
+        "streamDeclarations": {
+            "Custom-DuoSecurityAuthentication_CL": {
+                "columns": [
+                    { "name": "access_device", "type": "dynamic" },
+                    { "name": "adaptive_trust_assessments", "type": "dynamic" },
+                    { "name": "alias", "type": "string" },
+                    { "name": "application", "type": "dynamic" },
+                    { "name": "auth_device", "type": "dynamic" },
+                    { "name": "email", "type": "string" },
+                    { "name": "event_type", "type": "string" },
+                    { "name": "factor", "type": "string" },
+                    { "name": "isotimestamp", "type": "string" },
+                    { "name": "ood_software", "type": "string" },
+                    { "name": "passport_assessment", "type": "dynamic" },
+                    { "name": "rbfs_triggered_attacks", "type": "dynamic" },
+                    { "name": "reason", "type": "string" },
+                    { "name": "result", "type": "string" },
+                    { "name": "timestamp", "type": "long" },
+                    { "name": "trusted_endpoint_status", "type": "string" },
+                    { "name": "trusted_session_info", "type": "dynamic" },
+                    { "name": "txid", "type": "string" },
+                    { "name": "user", "type": "dynamic" }
+                ]
+            }
+        },
+        "destinations": {
+            "logAnalytics": [
+                {
+                    "workspaceResourceId": "{{workspaceResourceId}}",
+                    "name": "clv2ws1"
+                }
+            ]
+        },
+        "dataFlows": [
+            {
+                "streams": [ "Custom-DuoSecurityAuthentication_CL" ],
+                "destinations": [ "clv2ws1" ],
+                "outputStream": "Custom-DuoSecurityAuthentication_CL",
+                "transformKql": "source | extend TimeGenerated = todatetime(isotimestamp)"
+            }
+        ]
+    }
+}

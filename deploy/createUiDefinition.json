@@ -5,7 +5,7 @@
   "parameters": {
     "config": {
       "isWizard": false,
-      "basics": { "description": "Deploys the Cisco Duo Security (CCF) solution: connector, DCE/DCR/tables, parsers, analytic rules, hunting queries, and workbook. **Deploy the signing proxy first** (signing-proxy/azuredeploy.json) and have its URL + function key ready." }
+      "basics": { "description": "Deploys the Cisco Duo Security (CCF) solution: three connectors (authentication, activity, telephony), a shared DCE, per-connector DCRs and tables, the CiscoDuo parser, analytic rules, hunting queries, and the workbook. Authentication uses Microsoft's built-in **CiscoDuo** CCF auth type — **no signing proxy or Azure Function**. After deployment, open each Cisco Duo connector in Microsoft Sentinel > Data connectors, enter your Duo API host / integration key / secret key, and click **Connect**." }
     },
     "basics": [
       {
@@ -18,49 +18,21 @@
           "regex": "^[A-Za-z0-9][A-Za-z0-9-]{2,61}[A-Za-z0-9]$",
           "validationMessage": "Enter a valid Log Analytics workspace name."
         }
-      }
-    ],
-    "steps": [
+      },
       {
-        "name": "proxy",
-        "label": "Duo signing proxy",
-        "elements": [
-          {
-            "name": "info",
-            "type": "Microsoft.Common.InfoBox",
-            "visible": true,
-            "options": {
-              "text": "The connector polls a signing proxy (an Azure Function) that signs Duo Admin API requests. Deploy it first with signing-proxy/azuredeploy.json, then provide its base URL and function key.",
-              "style": "Info"
-            }
-          },
-          {
-            "name": "proxyBaseUrl",
-            "type": "Microsoft.Common.TextBox",
-            "label": "Signing proxy base URL",
-            "toolTip": "For example: https://your-proxy-app.azurewebsites.net/api",
-            "constraints": {
-              "required": true,
-              "regex": "^https://.+/api/?$",
-              "validationMessage": "Enter the proxy base URL ending in /api."
-            }
-          },
-          {
-            "name": "functionKey",
-            "type": "Microsoft.Common.PasswordBox",
-            "label": { "password": "Function key", "confirmPassword": "Confirm function key" },
-            "toolTip": "Azure Functions key for the signing proxy.",
-            "constraints": { "required": true },
-            "options": { "hideConfirmation": true }
-          }
-        ]
+        "name": "connectInfo",
+        "type": "Microsoft.Common.InfoBox",
+        "visible": true,
+        "options": {
+          "text": "Duo credentials (API host, integration key, secret key) are entered on each connector page after deployment — Data connectors > Cisco Duo Security … > Connect — not here. No secret is stored in this deployment.",
+          "style": "Info"
+        }
       }
     ],
+    "steps": [],
     "outputs": {
       "workspace": "[basics('workspace')]",
-      "workspace-location": "[location()]",
-      "proxyBaseUrl": "[steps('proxy').proxyBaseUrl]",
-      "functionKey": "[steps('proxy').functionKey]"
+      "workspace-location": "[location()]"
     }
   }
 }

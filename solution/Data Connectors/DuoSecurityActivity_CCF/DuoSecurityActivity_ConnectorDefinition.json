@@ -1,0 +1,115 @@
+{
+    "name": "DuoSecurityActivityConnectorDefinition",
+    "apiVersion": "2022-09-01-preview",
+    "type": "Microsoft.SecurityInsights/dataConnectorDefinitions",
+    "location": "{{location}}",
+    "kind": "Customizable",
+    "availability": {
+        "isPreview": true,
+        "status": 1
+    },
+    "properties": {
+        "connectorUiConfig": {
+            "id": "DuoSecurityActivityConnectorDefinition",
+            "title": "Cisco Duo Security – Activity Logs (CCF)",
+            "publisher": "Cisco",
+            "descriptionMarkdown": "Ingests **administrator/activity** logs from the [Cisco Duo Admin API v2](https://duo.com/docs/adminapi#overview) directly into Microsoft Sentinel using the Codeless Connector Framework. Signing uses the built-in **CiscoDuo** HMAC API-key authentication (Integration Key + Secret Key) performed inside the polling engine — no signing proxy or Azure Function required.",
+            "graphQueriesTableName": "DuoSecurityActivity_CL",
+            "graphQueries": [
+                {
+                    "metricName": "Total activity logs received",
+                    "legend": "{{graphQueriesTableName}}",
+                    "baseQuery": "{{graphQueriesTableName}} | where TimeGenerated > ago(14d) | summarize count() by bin(TimeGenerated, 1d)"
+                }
+            ],
+            "dataTypes": [
+                {
+                    "name": "{{graphQueriesTableName}}",
+                    "lastDataReceivedQuery": "{{graphQueriesTableName}} | summarize Time = max(TimeGenerated) | where isnotempty(Time)"
+                }
+            ],
+            "connectivityCriteria": [
+                {
+                    "type": "HasDataConnectors"
+                }
+            ],
+            "sampleQueries": [
+                {
+                    "description": "All activity events from the last 24 hours",
+                    "query": "DuoSecurityActivity_CL | where TimeGenerated > ago(24h) | take 100"
+                },
+                {
+                    "description": "Admin activity by actor and action",
+                    "query": "DuoSecurityActivity_CL | summarize count() by tostring(actor.name), tostring(action.name)"
+                }
+            ],
+            "permissions": {
+                "resourceProvider": [
+                    {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "read and write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                            "write": true,
+                            "read": true,
+                            "delete": true
+                        }
+                    }
+                ],
+                "customs": [
+                    {
+                        "name": "Cisco Duo API Key",
+                        "description": "A Cisco Duo Integration Key and Secret Key with the **Grant read log** permission are required. Create an Admin API application in the Duo Admin Panel. [See documentation](https://duo.com/docs/adminapi#overview)."
+                    }
+                ]
+            },
+            "instructionSteps": [
+                {
+                    "title": "Step 1 - Obtain Cisco Duo Admin API credentials",
+                    "description": "1. Log in to the [Cisco Duo Admin Panel](https://admin.duosecurity.com).\n2. Navigate to **Applications** and click **Protect an Application**.\n3. Search for **Admin API** and click **Protect**.\n4. Copy the **API Hostname**, **Integration Key**, and **Secret Key**.\n5. Ensure the application has the **Grant read log** permission enabled."
+                },
+                {
+                    "title": "Step 2 - Connect Cisco Duo to Microsoft Sentinel",
+                    "description": "Enter your Cisco Duo Admin API credentials below to begin ingesting activity logs.",
+                    "instructions": [
+                        {
+                            "type": "Textbox",
+                            "parameters": {
+                                "label": "API Base URL",
+                                "placeholder": "https://api-XXXXXXXX.duosecurity.com",
+                                "type": "text",
+                                "name": "BaseUrl"
+                            }
+                        },
+                        {
+                            "type": "Textbox",
+                            "parameters": {
+                                "label": "Integration Key (Username)",
+                                "placeholder": "Enter your Duo Integration Key",
+                                "type": "text",
+                                "name": "ikey"
+                            }
+                        },
+                        {
+                            "type": "Textbox",
+                            "parameters": {
+                                "label": "Secret Key (Password)",
+                                "placeholder": "Enter your Duo Secret Key",
+                                "type": "password",
+                                "name": "skey"
+                            }
+                        },
+                        {
+                            "type": "ConnectionToggleButton",
+                            "parameters": {
+                                "connectLabel": "connect",
+                                "name": "connect"
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+}

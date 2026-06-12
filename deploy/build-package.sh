@@ -40,12 +40,14 @@ cat <<EOF
    mainTemplate.json        (deployable ARM solution)
    createUiDefinition.json  (portal Create wizard)
 
- Deploy it (after the signing proxy is up):
+ Deploy it:
    az deployment group create -g <rg> \\
      --template-file solution/Package/mainTemplate.json \\
-     --parameters workspace=<workspace> \\
-                  proxyBaseUrl=https://<proxy-app>.azurewebsites.net/api \\
-                  functionKey=<function-key>
+     --parameters workspace=<workspace> workspace-location=<region>
+
+ Then open each Cisco Duo connector in Microsoft Sentinel > Data connectors,
+ enter the Duo API host / integration key / secret key, and click Connect.
+ (No signing proxy — authentication uses the built-in CiscoDuo CCF auth type.)
 
  Or in the portal: "Deploy a custom template" > "Build your own" >
    load mainTemplate.json, then "Edit the UI definition" with createUiDefinition.json.

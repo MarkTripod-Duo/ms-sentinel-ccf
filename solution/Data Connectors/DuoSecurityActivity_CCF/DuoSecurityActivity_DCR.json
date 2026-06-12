@@ -1,0 +1,42 @@
+{
+    "name": "DuoSecurityActivityDCR",
+    "apiVersion": "2024-03-11",
+    "type": "Microsoft.Insights/dataCollectionRules",
+    "kind": "Direct",
+    "location": "{{location}}",
+    "tags": {
+        "createdBy": "SentinelCodelessConnector"
+    },
+    "properties": {
+        "streamDeclarations": {
+            "Custom-DuoSecurityActivity_CL": {
+                "columns": [
+                    { "name": "action", "type": "dynamic" },
+                    { "name": "activity_id", "type": "string" },
+                    { "name": "actor", "type": "dynamic" },
+                    { "name": "akey", "type": "string" },
+                    { "name": "client_ip", "type": "string" },
+                    { "name": "target", "type": "dynamic" },
+                    { "name": "timestamp", "type": "long" },
+                    { "name": "ts", "type": "string" }
+                ]
+            }
+        },
+        "destinations": {
+            "logAnalytics": [
+                {
+                    "workspaceResourceId": "{{workspaceResourceId}}",
+                    "name": "clv2ws1"
+                }
+            ]
+        },
+        "dataFlows": [
+            {
+                "streams": [ "Custom-DuoSecurityActivity_CL" ],
+                "destinations": [ "clv2ws1" ],
+                "outputStream": "Custom-DuoSecurityActivity_CL",
+                "transformKql": "source | extend TimeGenerated = todatetime(ts)"
+            }
+        ]
+    }
+}

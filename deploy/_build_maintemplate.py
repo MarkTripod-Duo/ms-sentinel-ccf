@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
 """Assemble a self-contained, deployable mainTemplate.json from the solution source.
 
-Reads every artifact under solution/ (connector definition, pollers, DCR, tables, parsers, analytic
-rules, hunting queries, workbook) and emits one ARM template that creates the whole Sentinel-side
-solution: DCE + tables + DCR + connector definition + pollers (wired to the signing proxy) + parsers
-+ rules + hunts + workbook. The signing-proxy Azure Function is deployed separately
-(signing-proxy/azuredeploy.json); this template's createUiDefinition collects its URL + key.
+Reads every artifact under solution/ (three per-endpoint CCF connectors — authentication, activity,
+telephony — each with its connector definition, poller, DCR and table, plus the parsers, analytic rules,
+hunting queries and workbook) and emits one ARM template that creates the whole Sentinel-side solution:
+a shared DCE + 3 tables + 3 DCRs + 3 connector definitions + 3 pollers + parsers + rules + hunts +
+workbook.
 
-This is a *deployable* artifact (one-click ARM install). It is intentionally NOT the Content Hub
-gallery format (no contentPackages/metadata resources) — for that, use deploy/stage-for-packaging.sh
-with the official V3 tool.
+Authentication is the built-in **CiscoDuo** CCF auth type (HMAC signing in the polling engine) — no
+signing proxy. The pollers call Duo directly; the Duo credentials (API host / integration key / secret
+key) are entered on each connector page at Connect time, so they are NOT ARM parameters and no secret is
+baked into the deployment. The poller carries them as escaped template literals
+(``[concat(parameters('BaseUrl'),...)]`` / ``[parameters('ikey')]`` / ``[parameters('skey')]``) that
+Sentinel resolves when the operator clicks **Connect**.
+
+This is a *deployable* artifact (one-click ARM install). It is intentionally NOT the Content Hub gallery
+format (no contentPackages/metadata resources) — for that, use deploy/stage-for-packaging.sh with the
+official V3 tool.
 
 Usage: python3 deploy/_build_maintemplate.py   ->   writes solution/Package/mainTemplate.json
 """
@@ -25,15 +32,22 @@ import yaml
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOL = os.path.join(ROOT, "solution")
-CCP = os.path.join(SOL, "Data Connectors", "DuoSecurityCCF_ccp")
+DC = os.path.join(SOL, "Data Connectors")
 OUT_DIR = os.path.join(SOL, "Package")
+
+# One CCF connector per Duo log endpoint. Each folder holds <prefix>_{ConnectorDefinition,PollingConfig,
+# DCR,Table}.json and ships its own single-stream DCR + table.
+CONNECTORS = [
+    {"key": "auth", "folder": "DuoSecurityAuth_CCF", "prefix": "DuoSecurityAuth"},
+    {"key": "activity", "folder": "DuoSecurityActivity_CCF", "prefix": "DuoSecurityActivity"},
+    {"key": "telephony", "folder": "DuoSecurityTelephony_CCF", "prefix": "DuoSecurityTelephony"},
+]
 
 # ARM expressions for the deploy-time wiring.
 WS_LOC = "[parameters('workspace-location')]"
 WS_RES_ID = "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspace'))]"
 DCE_RES_ID = "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]"
 DCE_ENDPOINT = "[reference(resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName')), '2022-06-01').logsIngestion.endpoint]"
-DCR_IMMUTABLE = "[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName')), '2022-06-01').immutableId]"
 WORKBOOK_GUID = "c587e550-f8fc-4950-9afe-8adb83e986bd"
 
 DUR = {"m": "PT{}M", "h": "PT{}H", "d": "P{}D"}
@@ -87,8 +101,11 @@ def parser_param_signature(parser_params):
 
 def build():
     resources = []
+    variables = {
+        "dceName": "[concat('duo-ccf-dce-', uniqueString(resourceGroup().id, parameters('workspace')))]",
+    }
 
-    # --- DCE ---
+    # --- Shared DCE ---
     resources.append({
         "type": "Microsoft.Insights/dataCollectionEndpoints",
         "apiVersion": "2022-06-01",
@@ -96,66 +113,86 @@ def build():
         "location": WS_LOC,
         "properties": {"networkAcls": {"publicNetworkAccess": "Enabled"}},
     })
+    dce_dep = "[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]"
 
-    # --- Tables ---
-    table_dep_ids = []
-    for t in load_json(os.path.join(CCP, "DuoSecurity_Tables.json")):
-        tname = t["properties"]["schema"]["name"]
-        resources.append({
-            "type": "Microsoft.OperationalInsights/workspaces/tables",
-            "apiVersion": "2022-10-01",
-            "name": ws_child_name(tname),
-            "properties": t["properties"],
-        })
-        table_dep_ids.append(
-            f"[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), '{tname}')]"
+    # --- One connector set (table + DCR + definition + poller) per endpoint ---
+    for c in CONNECTORS:
+        folder = os.path.join(DC, c["folder"])
+        prefix = c["prefix"]
+        dcr_var = f"dcr{c['key'].capitalize()}Name"
+        variables[dcr_var] = (
+            f"[concat('duo-ccf-dcr-{c['key']}-', uniqueString(resourceGroup().id, parameters('workspace')))]"
         )
 
-    # --- DCR ---
-    dcr = load_json(os.path.join(CCP, "DuoSecurity_DCR.json"))[0]
-    dprops = dcr["properties"]
-    dprops["destinations"]["logAnalytics"][0]["workspaceResourceId"] = WS_RES_ID
-    dprops["dataCollectionEndpointId"] = DCE_RES_ID
-    resources.append({
-        "type": "Microsoft.Insights/dataCollectionRules",
-        "apiVersion": "2022-06-01",
-        "name": "[variables('dcrName')]",
-        "location": WS_LOC,
-        "dependsOn": ["[resourceId('Microsoft.Insights/dataCollectionEndpoints', variables('dceName'))]"] + table_dep_ids,
-        "properties": dprops,
-    })
+        # Tables
+        table_dep_ids = []
+        for t in load_json(os.path.join(folder, f"{prefix}_Table.json")):
+            tname = t["properties"]["schema"]["name"]
+            resources.append({
+                "type": "Microsoft.OperationalInsights/workspaces/tables",
+                "apiVersion": "2022-10-01",
+                "name": ws_child_name(tname),
+                "properties": t["properties"],
+            })
+            table_dep_ids.append(
+                f"[resourceId('Microsoft.OperationalInsights/workspaces/tables', parameters('workspace'), '{tname}')]"
+            )
 
-    # --- Connector definition ---
-    definition = load_json(os.path.join(CCP, "DuoSecurity_DataConnectorDefinition.json"))
-    def_id = definition["properties"]["connectorUiConfig"]["id"]
-    resources.append({
-        "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
-        "apiVersion": "2022-09-01-preview",
-        "name": sentinel_name(def_id),
-        "location": WS_LOC,
-        "kind": "Customizable",
-        "properties": definition["properties"],
-    })
-    def_dep = f"[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions', parameters('workspace'), 'Microsoft.SecurityInsights', '{def_id}')]"
-    dcr_dep = "[resourceId('Microsoft.Insights/dataCollectionRules', variables('dcrName'))]"
-
-    # --- Pollers ---
-    for p in load_json(os.path.join(CCP, "DuoSecurity_PollingConfig.json")):
-        pr = p["properties"]
-        suffix = pr["request"]["apiEndpoint"].split("}}")[-1]  # e.g. /duo/authentication
-        pr["request"]["apiEndpoint"] = f"[concat(parameters('proxyBaseUrl'), '{suffix}')]"
-        pr["auth"]["ApiKey"] = "[parameters('functionKey')]"
-        pr["dcrConfig"]["dataCollectionEndpoint"] = DCE_ENDPOINT
-        pr["dcrConfig"]["dataCollectionRuleImmutableId"] = DCR_IMMUTABLE
+        # DCR (single stream, kind Direct)
+        dcr = load_json(os.path.join(folder, f"{prefix}_DCR.json"))
+        dprops = dcr["properties"]
+        dprops["destinations"]["logAnalytics"][0]["workspaceResourceId"] = WS_RES_ID
+        dprops["dataCollectionEndpointId"] = DCE_RES_ID
         resources.append({
-            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
-            "apiVersion": "2022-10-01-preview",
-            "name": sentinel_name(p["name"]),
+            "type": "Microsoft.Insights/dataCollectionRules",
+            "apiVersion": "2022-06-01",
+            "name": f"[variables('{dcr_var}')]",
+            "kind": dcr.get("kind", "Direct"),
             "location": WS_LOC,
-            "kind": "RestApiPoller",
-            "dependsOn": [def_dep, dcr_dep],
-            "properties": pr,
+            "dependsOn": [dce_dep] + table_dep_ids,
+            "properties": dprops,
         })
+        dcr_dep = f"[resourceId('Microsoft.Insights/dataCollectionRules', variables('{dcr_var}'))]"
+        dcr_immutable = (
+            f"[reference(resourceId('Microsoft.Insights/dataCollectionRules', variables('{dcr_var}')), '2022-06-01').immutableId]"
+        )
+
+        # Connector definition (Connect UI)
+        definition = load_json(os.path.join(folder, f"{prefix}_ConnectorDefinition.json"))
+        def_id = definition["properties"]["connectorUiConfig"]["id"]
+        def_res = {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+            "apiVersion": "2022-09-01-preview",
+            "name": sentinel_name(def_id),
+            "location": WS_LOC,
+            "kind": "Customizable",
+            "properties": definition["properties"],
+        }
+        if "availability" in definition:
+            def_res["availability"] = definition["availability"]
+        resources.append(def_res)
+        def_dep = (
+            f"[resourceId('Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions', "
+            f"parameters('workspace'), 'Microsoft.SecurityInsights', '{def_id}')]"
+        )
+
+        # Poller — credentials resolved at Connect time (escaped template literals, no ARM secrets).
+        for p in load_json(os.path.join(folder, f"{prefix}_PollingConfig.json")):
+            pr = p["properties"]
+            suffix = pr["request"]["apiEndpoint"].split("{{BaseUrl}}")[-1]  # e.g. /admin/v2/logs/authentication
+            pr["request"]["apiEndpoint"] = f"[[concat(parameters('BaseUrl'), '{suffix}')]"
+            # pr["auth"] keeps the source CiscoDuo block ([[parameters('ikey')] / [[parameters('skey')]).
+            pr["dcrConfig"]["dataCollectionEndpoint"] = DCE_ENDPOINT
+            pr["dcrConfig"]["dataCollectionRuleImmutableId"] = dcr_immutable
+            resources.append({
+                "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                "apiVersion": "2023-02-01-preview",
+                "name": sentinel_name(p["name"]),
+                "location": WS_LOC,
+                "kind": "RestApiPoller",
+                "dependsOn": [def_dep, dcr_dep],
+                "properties": pr,
+            })
 
     # --- Parsers (savedSearches) ---
     cd = load_yaml(os.path.join(SOL, "Parsers", "CiscoDuo.yaml"))
@@ -223,20 +260,16 @@ def build():
     template = {
         "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
         "contentVersion": "1.0.0.0",
-        "metadata": {"comments": "Self-contained deployable Cisco Duo CCF solution (connector + content). Deploy the signing proxy separately via signing-proxy/azuredeploy.json."},
+        "metadata": {"comments": "Self-contained deployable Cisco Duo CCF solution (3 per-endpoint connectors + content). Authentication uses the built-in CiscoDuo auth type — no signing proxy. Enter Duo credentials on each connector page and click Connect."},
         "parameters": {
             "workspace": {"type": "string", "metadata": {"description": "Sentinel-enabled Log Analytics workspace name."}},
             "workspace-location": {"type": "string", "defaultValue": "[resourceGroup().location]", "metadata": {"description": "Workspace region."}},
-            "proxyBaseUrl": {"type": "string", "metadata": {"description": "Duo signing proxy base URL, e.g. https://<app>.azurewebsites.net/api"}},
-            "functionKey": {"type": "securestring", "metadata": {"description": "Azure Functions key for the signing proxy."}},
         },
-        "variables": {
-            "dceName": "[concat('duo-ccf-dce-', uniqueString(resourceGroup().id, parameters('workspace')))]",
-            "dcrName": "[concat('duo-ccf-dcr-', uniqueString(resourceGroup().id, parameters('workspace')))]",
-        },
+        "variables": variables,
         "resources": resources,
         "outputs": {
             "tablesCreated": {"type": "string", "value": "DuoSecurityAuthentication_CL, DuoSecurityActivity_CL, DuoSecurityTelephony_CL"},
+            "connectInstructions": {"type": "string", "value": "Open each Cisco Duo connector in Microsoft Sentinel > Data connectors, enter the Duo API host / integration key / secret key, and click Connect."},
         },
     }
 

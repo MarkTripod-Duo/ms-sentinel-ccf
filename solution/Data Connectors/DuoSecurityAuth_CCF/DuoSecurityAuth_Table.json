@@ -1,0 +1,35 @@
+[
+    {
+        "name": "DuoSecurityAuthentication_CL",
+        "apiVersion": "2022-10-01",
+        "type": "Microsoft.OperationalInsights/workspaces/tables",
+        "location": "{{location}}",
+        "properties": {
+            "schema": {
+                "name": "DuoSecurityAuthentication_CL",
+                "columns": [
+                    { "name": "TimeGenerated", "type": "datetime" },
+                    { "name": "access_device", "type": "dynamic" },
+                    { "name": "adaptive_trust_assessments", "type": "dynamic" },
+                    { "name": "alias", "type": "string" },
+                    { "name": "application", "type": "dynamic" },
+                    { "name": "auth_device", "type": "dynamic" },
+                    { "name": "email", "type": "string" },
+                    { "name": "event_type", "type": "string" },
+                    { "name": "factor", "type": "string" },
+                    { "name": "isotimestamp", "type": "string" },
+                    { "name": "ood_software", "type": "string" },
+                    { "name": "passport_assessment", "type": "dynamic" },
+                    { "name": "rbfs_triggered_attacks", "type": "dynamic" },
+                    { "name": "reason", "type": "string" },
+                    { "name": "result", "type": "string" },
+                    { "name": "timestamp", "type": "long" },
+                    { "name": "trusted_endpoint_status", "type": "string" },
+                    { "name": "trusted_session_info", "type": "dynamic" },
+                    { "name": "txid", "type": "string" },
+                    { "name": "user", "type": "dynamic" }
+                ]
+            }
+        }
+    }
+]

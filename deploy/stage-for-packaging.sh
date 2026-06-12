@@ -34,7 +34,7 @@ DEST="$SENTINEL/Solutions/$NAME"
 
 echo "==> Staging solution/ into $DEST ..."
 mkdir -p "$DEST/Data" "$DEST/Data Connectors"
-cp -R "$ROOT/solution/Data Connectors/DuoSecurityCCF_ccp" "$DEST/Data Connectors/"
+cp -R "$ROOT/solution/Data Connectors/." "$DEST/Data Connectors/"   # the three DuoSecurity*_CCF connector folders
 cp -R "$ROOT/solution/Parsers" "$DEST/"
 cp -R "$ROOT/solution/Analytic Rules" "$DEST/"
 cp -R "$ROOT/solution/Hunting Queries" "$DEST/"

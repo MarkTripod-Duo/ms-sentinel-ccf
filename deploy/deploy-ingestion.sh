@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# Stage 2 — create the ingestion resources for the Duo CCF connector:
+# Stage 1 — create the ingestion resources for the Duo CCF connectors:
 #   * a Data Collection Endpoint (DCE)
 #   * the three custom DuoSecurity*_CL tables
 #   * the Data Collection Rule (DCR) with 3 streams + transforms
-# and print the two values Stage 3 needs: the DCE logs-ingestion URL and the DCR immutable id.
+# and print the two values the connector stage needs: the DCE logs-ingestion URL and the DCR immutable id.
 #
-# Prereqs: az CLI (logged in). Run Stage 1 (deploy-proxy.sh) and create the Sentinel workspace first.
+# Prereqs: az CLI (logged in). Create the Sentinel workspace first.
 #
 # Usage:
 #   ./deploy-ingestion.sh \

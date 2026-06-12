@@ -2,7 +2,7 @@
   "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
   "contentVersion": "1.0.0.0",
   "metadata": {
-    "comments": "Stage 2 ingestion resources for the Duo CCF connector: the three custom DuoSecurity*_CL tables and the Data Collection Rule (3 streams + transforms) that lands data in them. The DCE is created by deploy-ingestion.sh and passed in as dataCollectionEndpointId. Mirrors solution/Data Connectors/DuoSecurityCCF_ccp/DuoSecurity_Tables.json and DuoSecurity_DCR.json."
+    "comments": "Stage 1 ingestion resources for the Duo CCF connectors: the three custom DuoSecurity*_CL tables and the Data Collection Rule (3 streams + transforms) that lands data in them. The DCE is created by deploy-ingestion.sh and passed in as dataCollectionEndpointId. Mirrors the per-endpoint solution/Data Connectors/DuoSecurity*_CCF/ table + DCR schemas, combined here as one multi-stream DCR for the scripted deploy (the Content Hub package ships one DCR per connector)."
   },
   "parameters": {
     "workspaceName": { "type": "string", "metadata": { "description": "Log Analytics workspace name (Sentinel-enabled)." } },

@@ -1,0 +1,56 @@
+[
+    {
+        "name": "DuoSecurityAuthenticationConnector",
+        "apiVersion": "2023-02-01-preview",
+        "type": "Microsoft.SecurityInsights/dataConnectors",
+        "location": "{{location}}",
+        "kind": "RestApiPoller",
+        "properties": {
+            "connectorDefinitionName": "DuoSecurityAuthConnectorDefinition",
+            "dataType": "DuoSecurityAuthentication_CL",
+            "dcrConfig": {
+                "streamName": "Custom-DuoSecurityAuthentication_CL",
+                "dataCollectionEndpoint": "{{dataCollectionEndpoint}}",
+                "dataCollectionRuleImmutableId": "{{dataCollectionRuleImmutableId}}"
+            },
+            "auth": {
+                "type": "CiscoDuo",
+                "APIKey": "[[parameters('ikey')]",
+                "ClientSecret": "[[parameters('skey')]"
+            },
+            "request": {
+                "apiEndpoint": "{{BaseUrl}}/admin/v2/logs/authentication",
+                "httpMethod": "GET",
+                "queryWindowInMin": 5,
+                "queryTimeFormat": "UnixTimestampInMills",
+                "startTimeAttributeName": "mintime",
+                "endTimeAttributeName": "maxtime",
+                "rateLimitQPS": 2,
+                "retryCount": 3,
+                "timeoutInSeconds": 120,
+                "headers": {
+                    "Accept": "application/json"
+                },
+                "queryParameters": {
+                    "limit": "1000",
+                    "sort": "ts:asc"
+                }
+            },
+            "paging": {
+                "pagingType": "NextPageToken",
+                "nextPageTokenJsonPath": "$.response.metadata.next_offset",
+                "nextPageParaName": "next_offset",
+                "pageSizeParaName": "limit",
+                "pageSize": 1000
+            },
+            "response": {
+                "eventsJsonPaths": [
+                    "$.response.authlogs"
+                ],
+                "format": "json",
+                "successStatusJsonPath": "$.stat",
+                "successStatusValue": "OK"
+            }
+        }
+    }
+]

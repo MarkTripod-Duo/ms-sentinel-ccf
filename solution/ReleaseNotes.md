@@ -1,6 +1,6 @@
 | **Version** | **Date Modified (DD-MM-YYYY)** | **Change History**                                  |
 |-------------|--------------------------------|-----------------------------------------------------|
-| 1.0.0       | 09-06-2026                     | Initial release. CCF connector for Duo Admin API v2 authentication/activity/telephony logs (via an HMAC signing proxy) into custom `DuoSecurity*_CL` tables. Forward-compatible replacement for the legacy HTTP Data Collector API connector (retires 2026-09-14). Includes a backward-compatible `CiscoDuo` parser (dual-run with the legacy `CiscoDuo_CL` table), 10 analytic rules + a connector data-ingestion-stopped health rule, 10 hunting queries, an ASIM Authentication parser, and the Cisco Duo workbook. |
+| 1.0.0       | 09-06-2026                     | Initial release. Three per-endpoint CCF connectors for Duo Admin API v2 authentication/activity/telephony logs into custom `DuoSecurity*_CL` tables, using Microsoft's built-in **CiscoDuo** auth type (HMAC signing in the polling engine — no proxy). Forward-compatible replacement for the legacy HTTP Data Collector API connector (retires 2026-09-14). Includes a backward-compatible `CiscoDuo` parser (dual-run with the legacy `CiscoDuo_CL` table), 10 analytic rules + a connector data-ingestion-stopped health rule, 10 hunting queries, an ASIM Authentication parser, and the Cisco Duo workbook. |
 
 ## Migration notes
 

@@ -5,6 +5,9 @@ __pycache__/
 venv/
 .pytest_cache/
 
+# macOS
+.DS_Store
+
 # Azure Functions local config (NEVER commit real Duo credentials)
 signing-proxy/local.settings.json
 signing-proxy/.python_packages/

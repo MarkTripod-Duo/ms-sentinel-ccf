@@ -18,8 +18,8 @@ For the **Microsoft Sentinel / SOC administrator** performing the cutover. You n
 Sentinel workspace's resource group; the Duo Admin API application (ikey / skey / `api-…duosecurity.com`
 host) with the **Grant read log** permission; and access to the existing `CiscoDuoSecurity` Function
 connector. Detailed deploy steps are in [`enable-connector.md`](enable-connector.md); production hardening
-(including zero-gap ingestion) is in [`operations.md`](operations.md). Budget a few days of dual-run overlap
-before cutover.
+(data completeness, credential rotation, rate limits) is in [`operations.md`](operations.md). Budget a few
+days of dual-run overlap before cutover.
 
 ## How it stays seamless: dual-run via the parser
 
@@ -35,14 +35,14 @@ gap and no rule rewrites.
   saved functions. (The upstream solution's own rules already use the `CiscoDuo` parser.)
 - Note your legacy table retention — you'll want to keep `CiscoDuo_CL` queryable through the overlap.
 
-**1. Deploy the signing proxy + CCF connector + content (new, alongside the old).**
-- Run `deploy/deploy-proxy.sh` → `deploy/deploy-ingestion.sh` → `deploy/deploy-connector.sh`, **or** deploy
-  the assembled package (`deploy/build-package.sh` → `solution/Package/mainTemplate.json`), which creates the
-  connector, DCE/DCR/tables, parsers, rules, hunts, and workbook in one step. See
+**1. Deploy the CCF connectors + content (new, alongside the old).**
+- Run `deploy/deploy-ingestion.sh` → `deploy/deploy-connector.sh`, **or** deploy the assembled package
+  (`deploy/build-package.sh` → `solution/Package/mainTemplate.json`), which creates the three connectors,
+  DCE/DCR/tables, parsers, rules, hunts, and workbook in one step; then **Connect** each connector with your
+  Duo credentials. Authentication uses Microsoft's built‑in **CiscoDuo** auth type — no signing proxy. See
   [`enable-connector.md`](enable-connector.md).
 - The legacy Azure Function connector keeps running untouched.
-- For production, consider enabling the zero-gap overlap (`DUO_MINTIME_LOOKBACK_SECONDS`) — see
-  [`operations.md`](operations.md).
+- For production data-completeness guidance, see [`operations.md`](operations.md).
 
 **2. Confirm the `CiscoDuo` parser supersedes the legacy one (this enables dual-run).**
 - This solution's `CiscoDuo` parser (v2.0.0) uses the same `FunctionAlias: CiscoDuo`, so it **replaces** the

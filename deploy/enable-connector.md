@@ -1,34 +1,20 @@
-# Deploy & enable the Duo CCF connector
+# Deploy & enable the Duo CCF connectors
 
-Three stages: **(1)** stand up the signing proxy, **(2)** create the ingestion resources (DCE, tables,
-DCR), **(3)** deploy the connector and connect it. Stage 3 has two paths — package it as a Content Hub
-solution (recommended) or wire the ARM resources by hand.
+Two stages: **(1)** create the ingestion resources (DCE, tables, DCR), **(2)** deploy the three connectors
+and connect them. Authentication uses Microsoft's built‑in **`CiscoDuo`** auth type — the pollers call Duo
+directly, so there is **no signing proxy** to stand up.
 
----
-
-## Stage 1 — Signing proxy
-
-```bash
-deploy/deploy-proxy.sh \
-  --resource-group <rg> \
-  --app-name       duo-ccf-proxy-<unique> \
-  --duo-host       api-XXXXXXXX.duosecurity.com \
-  --duo-ikey       DIXXXXXXXXXXXXXXXXXX \
-  --duo-skey       <duo-secret-key>
-```
-
-The Duo API application needs the **Grant read log** permission. The script prints the two values
-Stage 3 needs: **Signing proxy base URL** (`https://<app>.azurewebsites.net/api`) and **Function key**.
-Smoke-test the printed `curl` before continuing — you should get `{"stat":"OK", ...}`.
+**Prerequisite — Duo Admin API application.** In the [Duo Admin Panel](https://admin.duosecurity.com),
+protect an **Admin API** application with the **Grant read log** permission, and note its **API hostname**
+(`api-XXXXXXXX.duosecurity.com`), **Integration Key** (`ikey`), and **Secret Key** (`skey`).
 
 ---
 
-## Stage 2 — Ingestion resources (DCE + tables + DCR)
+## Stage 1 — Ingestion resources (DCE + tables + DCR)
 
-The connector pollers need a **Data Collection Endpoint** URL and the **DCR immutable id**.
+The connectors need a **Data Collection Endpoint** URL and the **DCR immutable id**.
 
-**Scripted (recommended):** creates the DCE, the three tables, and the DCR in one shot and prints
-both values:
+**Scripted (recommended):** creates the DCE, the three tables, and the DCR in one shot and prints both:
 
 ```bash
 deploy/deploy-ingestion.sh \
@@ -37,87 +23,75 @@ deploy/deploy-ingestion.sh \
   --location       eastus
 ```
 
-It deploys [`deploy/ingestion-template.json`](ingestion-template.json) (the same table + DCR schemas
-as the `solution/` source). Skip to Stage 3 with the printed `DCE_URL` / `DCR immutable id`.
+It deploys [`deploy/ingestion-template.json`](ingestion-template.json) (the same table + DCR schemas as the
+`solution/` source, combined as one multi-stream DCR for the scripted deploy). Continue to Stage 2 with the
+printed `DCE_URL` / `DCR immutable id`.
 
-**By hand (alternative):** the `solution/...` JSON files use CCF `{{placeholders}}`; the V3 packaging
-tool (Stage 3, Path A) fills them automatically. To create them manually, substitute the placeholders
-and deploy:
+**By hand (alternative):** create the DCE, the three tables (columns in each
+`solution/Data Connectors/DuoSecurity*_CCF/*_Table.json`), and the DCR(s) (from each `*_DCR.json`,
+substituting `{{workspaceResourceId}}` and `{{dataCollectionEndpointId}}`):
 
 ```bash
-WS=/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.OperationalInsights/workspaces/<workspace>
-
-# 2a. Data Collection Endpoint
 az monitor data-collection endpoint create -g <rg> -n duo-ccf-dce -l <location> --public-network-access Enabled
-DCE_ID=$(az monitor data-collection endpoint show -g <rg> -n duo-ccf-dce --query id -o tsv)
 DCE_URL=$(az monitor data-collection endpoint show -g <rg> -n duo-ccf-dce --query logsIngestion.endpoint -o tsv)
-
-# 2b. Custom tables — deploy the 3 tables from DuoSecurity_Tables.json (one PUT per table), e.g.:
-az monitor log-analytics workspace table create -g <rg> --workspace-name <workspace> \
-   -n DuoSecurityAuthentication_CL --columns TimeGenerated=datetime access_device=dynamic alias=string \
-   application=dynamic auth_device=dynamic email=string event_type=string factor=string isotimestamp=string \
-   ood_software=string reason=string result=string timestamp=long trusted_endpoint_status=string txid=string user=dynamic
-#  ...repeat for DuoSecurityActivity_CL and DuoSecurityTelephony_CL (see DuoSecurity_Tables.json for columns).
-
-# 2c. DCR — substitute {{workspaceResourceId}} and {{dataCollectionEndpointId}} in DuoSecurity_DCR.json then:
-az monitor data-collection rule create -g <rg> -n duo-ccf-dcr -l <location> --rule-file ./DuoSecurity_DCR.resolved.json
+# ...create the 3 tables + DCR(s), then:
 DCR_IMMUTABLE_ID=$(az monitor data-collection rule show -g <rg> -n duo-ccf-dcr --query immutableId -o tsv)
 ```
 
-Record `DCE_URL` and `DCR_IMMUTABLE_ID`.
-
-> The three poller `streamName`s (`Custom-DuoSecurityAuthentication_CL`, `…Activity_CL`, `…Telephony_CL`)
-> must match the DCR `streamDeclarations` exactly — they already do in the source files.
+> Each poller `streamName` (`Custom-DuoSecurityAuthentication_CL`, `…Activity_CL`, `…Telephony_CL`) must
+> match its DCR `streamDeclarations` exactly — they already do in the source files.
 
 ---
 
-## Stage 3, Path 0 — Scripted direct deploy (fastest for testing)
+## Stage 2, Path 0 — Scripted direct deploy (fastest for testing)
 
-Renders the definition + three pollers from the `solution/` source (substituting the proxy/DCE/DCR
-values) and PUTs them with `az rest`:
+Renders the three connector definitions + pollers from the `solution/` source — resolving the built‑in
+`CiscoDuo` auth block with your Duo credentials so the pollers are **active on deploy** — and PUTs them with
+`az rest`:
 
 ```bash
 deploy/deploy-connector.sh \
   --resource-group   rg-sentinel-duo-test \
   --workspace        law-sentinel-duo-test \
-  --proxy-url        "$PROXY_URL" \
-  --function-key     "$PROXY_KEY" \
-  --dce              "<DCE_URL from Stage 2>" \
-  --dcr-immutable-id "<dcr-... from Stage 2>"
+  --duo-host         https://api-XXXXXXXX.duosecurity.com \
+  --ikey             DIXXXXXXXXXXXXXXXXXX \
+  --skey             '<duo-secret-key>' \
+  --dce              "<DCE_URL from Stage 1>" \
+  --dcr-immutable-id "<dcr-... from Stage 1>"
 ```
 
-Good for a working test environment. For a publishable/shareable artifact, use Path A instead.
+Good for a working test environment. For a publishable/shareable artifact, use Path A.
 
-## Stage 3, Path A — Build a solution package (recommended for distribution)
+## Stage 2, Path A — Build a solution package (recommended for distribution)
 
-Both packaging paths are prepared in-repo.
+Both packaging paths are prepared in‑repo.
 
-**A1 — Self-contained deployable package** (no Azure-Sentinel clone, no PowerShell):
+**A1 — Self-contained deployable package** (no Azure‑Sentinel clone, no PowerShell):
 
 ```bash
 deploy/build-package.sh    # → solution/Package/{mainTemplate.json, createUiDefinition.json, .zip}
 ```
 
-Assembles the whole Sentinel-side solution (DCE + tables + DCR + connector definition + 3 pollers +
-parsers + 11 rules + 10 hunts + workbook) into one ARM template (validated with
-`az deployment group validate`). Requires `python3 -m pip install pyyaml`. Then deploy:
+Assembles the whole Sentinel‑side solution (shared DCE + 3 tables + 3 DCRs + 3 connector definitions + 3
+pollers + parsers + 11 rules + 10 hunts + workbook) into one ARM template (validated with
+`az deployment group validate`). Requires `python3 -m pip install pyyaml`. Then deploy and **Connect**:
 
 ```bash
 az deployment group create -g <rg> --template-file solution/Package/mainTemplate.json \
-  --parameters workspace=<ws> proxyBaseUrl=https://<proxy>.azurewebsites.net/api functionKey=<key>
+  --parameters workspace=<ws> workspace-location=<region>
 ```
 
-One-click deployable and portal "custom template"-loadable — but **not** the official Content Hub
-gallery format.
+The package carries no secrets — after it deploys, open each Cisco Duo connector in **Microsoft Sentinel →
+Data connectors**, enter the **API host / integration key / secret key**, and click **Connect**.
 
-> **Test it end-to-end in one command.** `deploy/test-package-deployment.sh` runs this whole path from
-> scratch — creates the workspace, deploys the proxy, builds the package, ARM-validates + deploys it, and
-> verifies (deployment state, rule/poller counts, parser resolution, data snapshot) with per-stage
-> PASS/FAIL. Preview with `--dry-run`; pair with `deploy/reset-test-env.sh` to re-test cleanly:
+> **Test it end-to-end in one command.** `deploy/test-package-deployment.sh` runs the whole path from
+> scratch — creates the workspace, deploys ingestion + the three connectors (built‑in CiscoDuo auth, active
+> pollers), builds + ARM‑validates the package, and verifies (active pollers, no Function App/Key Vault, data
+> snapshot) with per‑stage PASS/FAIL. Preview with `--dry-run`; pair with `deploy/reset-test-env.sh`:
 > ```bash
 > deploy/reset-test-env.sh --yes
-> deploy/test-package-deployment.sh --duo-host api-XXXX.duosecurity.com --duo-ikey DI... --duo-skey '<skey>' \
->   --proxy-location centralus --wait-for-data 15
+> deploy/test-package-deployment.sh --duo-host https://api-XXXX.duosecurity.com --ikey DI... --skey '<skey>' \
+>   --wait-for-data 15
 > ```
 
 **A2 — Official Content Hub package** (marketplace / Partner Center):
@@ -131,49 +105,44 @@ Stages `solution/` into the clone and runs the [V3 tool](https://github.com/Azur
 which emits the official `Package/` with the Content Hub `contentPackages`/metadata. Set real
 `publisherId`/`Author`/`offerId` first.
 
-Either way, in **Microsoft Sentinel → Data connectors**, open **Cisco Duo Security v2 Logs (CCF)**,
-enter the **proxy base URL** + **function key**, and click **Connect**.
+## Stage 2, Path B — Wire the ARM resources by hand
 
-> The single definition references three pollers (one file, array of three) and one DCR with three
-> streams — the documented CCP "single definition / multiple pollers" layout.
+Deploy each connector's definition and poller directly. In the poller, the credentials are escaped template
+literals that Microsoft Sentinel resolves when you click **Connect** on the connector page:
 
-## Stage 3, Path B — Wire the ARM resources by hand
-
-Deploy the connector definition and the three pollers directly, substituting the placeholders with
-the values from Stages 1–2:
-
-| Placeholder | Value |
+| Token | Value |
 | --- | --- |
-| `{{proxyBaseUrl}}` | Stage 1 proxy base URL |
-| `{{functionKey}}` | Stage 1 function key |
-| `{{dataCollectionEndpoint}}` | Stage 2 `DCE_URL` |
-| `{{dataCollectionRuleImmutableId}}` | Stage 2 `DCR_IMMUTABLE_ID` |
-| `{{location}}`, `{{workspace}}`, `{{workspaceResourceId}}` | your workspace details |
+| `{{BaseUrl}}` (in `apiEndpoint`) → `[parameters('BaseUrl')]` | Duo API host, entered at Connect |
+| `[[parameters('ikey')]` / `[[parameters('skey')]` (in `auth`) | Duo ikey / skey, entered at Connect |
+| `{{dataCollectionEndpoint}}` | Stage 1 `DCE_URL` |
+| `{{dataCollectionRuleImmutableId}}` | Stage 1 `DCR_IMMUTABLE_ID` |
 
-1. `PUT` the `dataConnectorDefinitions/DuoSecurityCCF` resource (from `DuoSecurity_DataConnectorDefinition.json`).
-2. `PUT` each of the three `dataConnectors` pollers (from `DuoSecurity_PollingConfig.json`).
-3. Confirm `isActive: true` and that each poller's `connectorDefinitionName` is `DuoSecurityCCF`.
+For each of `DuoSecurityAuth_CCF` / `DuoSecurityActivity_CCF` / `DuoSecurityTelephony_CCF`:
+1. `PUT` the `dataConnectorDefinitions/<id>` resource (from `*_ConnectorDefinition.json`).
+2. `PUT` the `dataConnectors/<name>` poller (from `*_PollingConfig.json`).
+3. On the connector page, enter the Duo host / ikey / skey and **Connect** (or set them in the body for an
+   active deploy, as `deploy-connector.sh` does).
 
 ---
 
 ## Verify (end-to-end)
 
-1. **Proxy**: the Stage 1 `curl` returns `{"stat":"OK","response":{"authlogs":[...],"metadata":{...}}}`.
-2. **Connector page**: shows **Connected** and, after a poll cycle (~5 min), "data received".
-3. **Tables**: in Logs, run each and confirm rows + a sane `TimeGenerated`:
+1. **Connector pages**: each Cisco Duo connector shows **Connected** and, after a poll cycle (~5 min),
+   "data received".
+2. **Tables**: in Logs, run each and confirm rows + a sane `TimeGenerated`:
    ```kusto
    DuoSecurityAuthentication_CL | take 10
    DuoSecurityActivity_CL       | take 10
    DuoSecurityTelephony_CL      | take 10
    ```
-4. **Pagination**: generate >1000 auth events in a window (or lower `pageSize`) and confirm all are
-   ingested — proves the `next_offset` cursor round-trips through the proxy.
+3. **Parser + content**: `CiscoDuo | summarize count() by EventType` shows all three streams;
+   `ASimAuthenticationDuoSecurity | take 5` resolves.
+4. **Pagination**: generate >1000 auth events in a window and confirm all are ingested — proves the
+   `next_offset` cursor (the auth‑log `[ts, txid]` array) round‑trips through the native `CiscoDuo` auth type.
+5. **Proxy‑free**: the resource group contains a DCE, tables, DCR(s), connectors, and content — **no**
+   Function App, plan, storage, or Key Vault.
 
 ## Operational notes
 
-- **Duo's ~2-minute availability delay**: events younger than ~2 min return empty and are picked up
-  on a later poll cycle as the `mintime`/`maxtime` window advances. If you require a strict
-  zero-gap guarantee at the trailing edge, switch the authentication poller to `PersistentToken`
-  paging (Duo's `next_offset` is a durable cursor) or have the proxy clamp `maxtime` to `now-2min`.
-- **Rate limits**: the proxy returns Duo `429` + `Retry-After` to CCF, which backs off and retries
-  (`retryCount: 3`). Keep `rateLimitQPS` modest.
+Production hardening — the trailing‑edge data‑completeness gap, credential rotation, multiple Duo accounts,
+and rate limits — is in [`operations.md`](operations.md).

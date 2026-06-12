@@ -1,9 +1,13 @@
-"""Unit tests for the Duo signing proxy core logic and the CCF solution's internal consistency.
+"""Unit tests for the legacy Duo signing proxy core logic.
 
 Runs with the standard library + pytest only. The `azure-functions` and `duo-hmac` packages are not
 required (the one signing test self-skips if `duo-hmac` is absent).
 
     python -m pytest tests/
+
+These cover the signing proxy, which is retained only until the built-in **CiscoDuo** CCF auth type is
+verified live (then the proxy and this file are removed). The active per-endpoint connectors are validated
+in test_connector_config.py.
 """
 
 from __future__ import annotations
@@ -16,7 +20,6 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 PROXY = REPO / "signing-proxy"
-CCP = REPO / "solution" / "Data Connectors" / "DuoSecurityCCF_ccp"
 TESTS = Path(__file__).resolve().parent
 
 import sys
@@ -112,81 +115,3 @@ def test_duo_hmac_signs_request_when_available():
     # duo-hmac returns a scheme-less host/path?query; ensure_https() makes it usable by urllib
     assert not url.startswith(("http://", "https://"))
     assert core.ensure_https(url) == "https://" + url
-
-
-# ------------------------------------------------------------------ CCF solution consistency
-
-EXPECTED_STREAMS = {
-    "Custom-DuoSecurityAuthentication_CL",
-    "Custom-DuoSecurityActivity_CL",
-    "Custom-DuoSecurityTelephony_CL",
-}
-EXPECTED_TABLES = {
-    "DuoSecurityAuthentication_CL",
-    "DuoSecurityActivity_CL",
-    "DuoSecurityTelephony_CL",
-}
-
-
-def test_all_solution_json_is_valid():
-    for path in CCP.glob("*.json"):
-        _load(path)  # raises on malformed JSON
-
-
-def test_pollers_reference_the_definition_and_expected_streams():
-    definition = _load(CCP / "DuoSecurity_DataConnectorDefinition.json")
-    definition_id = definition["properties"]["connectorUiConfig"]["id"]
-
-    pollers = _load(CCP / "DuoSecurity_PollingConfig.json")
-    assert isinstance(pollers, list) and len(pollers) == 3
-
-    names = {p["name"] for p in pollers}
-    assert len(names) == 3, "poller names must be unique"
-
-    streams = set()
-    for poller in pollers:
-        props = poller["properties"]
-        assert props["connectorDefinitionName"] == definition_id
-        assert props["kind" if "kind" in props else "auth"]  # sanity: properties populated
-        streams.add(props["dcrConfig"]["streamName"])
-    assert streams == EXPECTED_STREAMS
-
-
-def test_dcr_streams_match_pollers_and_tables():
-    dcr = _load(CCP / "DuoSecurity_DCR.json")[0]["properties"]
-    declared = set(dcr["streamDeclarations"].keys())
-    assert declared == EXPECTED_STREAMS
-
-    flow_streams = set()
-    for flow in dcr["dataFlows"]:
-        assert len(flow["streams"]) == 1
-        stream = flow["streams"][0]
-        flow_streams.add(stream)
-        # custom-table connectors output to the same Custom-<table> stream
-        assert flow["outputStream"] == stream
-        assert "TimeGenerated" in flow["transformKql"]
-    assert flow_streams == EXPECTED_STREAMS
-
-
-def test_tables_match_expected_and_have_timegenerated():
-    tables = _load(CCP / "DuoSecurity_Tables.json")
-    names = {t["properties"]["schema"]["name"] for t in tables}
-    assert names == EXPECTED_TABLES
-    for table in tables:
-        cols = {c["name"] for c in table["properties"]["schema"]["columns"]}
-        assert "TimeGenerated" in cols
-
-
-def test_poller_event_paths_are_correct_per_stream():
-    pollers = _load(CCP / "DuoSecurity_PollingConfig.json")
-    by_stream = {p["properties"]["dcrConfig"]["streamName"]: p for p in pollers}
-
-    auth = by_stream["Custom-DuoSecurityAuthentication_CL"]["properties"]
-    assert auth["response"]["eventsJsonPaths"] == ["$.response.authlogs"]
-    assert auth["request"]["apiEndpoint"].endswith("/duo/authentication")
-    assert auth["request"]["queryTimeFormat"] == "UnixTimestampInMills"
-    assert auth["paging"]["nextPageTokenJsonPath"] == "$.response.metadata.next_offset"
-
-    for stream in ("Custom-DuoSecurityActivity_CL", "Custom-DuoSecurityTelephony_CL"):
-        props = by_stream[stream]["properties"]
-        assert props["response"]["eventsJsonPaths"] == ["$.response.items"]
