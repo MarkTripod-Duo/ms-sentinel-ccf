@@ -95,8 +95,8 @@ tests/                         sample v2 payloads + connector-config unit tests
 | Activity | `/admin/v2/logs/activity` | `$.response.items` | string | `DuoSecurityActivity_CL` |
 | Telephony | `/admin/v2/logs/telephony` | `$.response.items` | string | `DuoSecurityTelephony_CL` |
 
-*Trust Monitor (`/admin/v2/trust_monitor/events`) is intentionally deferred — it follows the exact
-same pattern; add a 4th connector folder to enable it.*
+*Additional Duo log streams — e.g. **Single Sign-On** (`/admin/v2/logs/sso`) — follow the exact same
+pattern. See [adding a new log endpoint](deploy/adding-log-endpoints.md) to add one.*
 
 ### Querying note
 
@@ -127,6 +127,7 @@ end: `deploy/test-package-deployment.sh --duo-host … --ikey … --skey …`.
 | [deploy/enable-connector.md](deploy/enable-connector.md) | Full deploy walkthrough (ingestion → connect), packaging, and end-to-end verification |
 | [deploy/migration-runbook.md](deploy/migration-runbook.md) | **Administrators:** migrating off the legacy HTTP-Data-Collector connector — dual-run → cutover before 2026-09-14 |
 | [deploy/operations.md](deploy/operations.md) | Production hardening: data completeness, credential rotation, multi-account, rate limits |
+| [deploy/adding-log-endpoints.md](deploy/adding-log-endpoints.md) | **Maintainers:** add a new Duo log endpoint as an additional connector |
 | [solution/Parsers/ASim/README.md](solution/Parsers/ASim/README.md) | ASIM Authentication parsers — conformance + unified-view inclusion |
 | [solution/ReleaseNotes.md](solution/ReleaseNotes.md) | Version history + per-detection status (which rules fire / are mapped / are pending) |
 

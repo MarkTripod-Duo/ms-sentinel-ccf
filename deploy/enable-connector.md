@@ -146,3 +146,6 @@ For each of `DuoSecurityAuth_CCF` / `DuoSecurityActivity_CCF` / `DuoSecurityTele
 
 Production hardening — the trailing‑edge data‑completeness gap, credential rotation, multiple Duo accounts,
 and rate limits — is in [`operations.md`](operations.md).
+
+To add another Duo log endpoint (e.g. SSO) as an additional connector, see
+[`adding-log-endpoints.md`](adding-log-endpoints.md).
